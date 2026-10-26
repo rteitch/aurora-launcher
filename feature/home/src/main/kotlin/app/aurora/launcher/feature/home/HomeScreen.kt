@@ -8,6 +8,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -40,6 +42,9 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Redo
+import androidx.compose.material.icons.automirrored.outlined.Undo
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.Check
@@ -49,6 +54,7 @@ import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
+import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Wallpaper
@@ -72,6 +78,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -83,6 +90,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -179,7 +187,12 @@ fun HomeScreen(
     val palette = AuroraTheme.palette
     val haptics = LocalHapticFeedback.current
     val density = LocalDensity.current
+    val configuration = LocalConfiguration.current
+    val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
+    val edgeThresholdPx = with(density) { 48.dp.toPx() }
     val scope = rememberCoroutineScope()
+    val canUndo by viewModel.canUndo.collectAsStateWithLifecycle()
+    val canRedo by viewModel.canRedo.collectAsStateWithLifecycle()
 
     val isEditMode = state.mode is HomeUiMode.EditMode
     val activeDrag = (state.mode as? HomeUiMode.EditMode)?.dragSession
@@ -235,6 +248,7 @@ fun HomeScreen(
     val orphanNotice = stringResource(R.string.home_orphan_placeholder_notice)
     val addedNotice = stringResource(R.string.home_grid_added_notice)
     val fullNotice = stringResource(R.string.home_grid_full_notice)
+    val smartGlanceRemovedNotice = stringResource(R.string.smart_glance_removed_notice)
 
     val a11yEdit = stringResource(R.string.a11y_enter_edit_mode)
     val a11yLeft = stringResource(R.string.a11y_move_left)
@@ -279,48 +293,72 @@ fun HomeScreen(
                 workspacePages.size,
             ) {
                 if (onAppLibraryPage || isEditMode) return@pointerInput
-                var startX = 0f
-                var startY = 0f
-                var accumDy = 0f
-                var triggered = false
-                detectVerticalDragGestures(
-                    onDragStart = { offset ->
-                        startX = offset.x
-                        startY = offset.y
-                        accumDy = 0f
-                        triggered = false
-                    },
-                    onVerticalDrag = { _, dragAmount ->
-                        if (triggered) return@detectVerticalDragGestures
-                        // Ignore top 40dp edge so Android notification shade remains untouched (Appendix A).
-                        if (startY < 40.dp.toPx()) return@detectVerticalDragGestures
-                        accumDy += dragAmount
-                        if (accumDy > 32.dp.toPx()) {
-                            triggered = true
-                            val isTopRightZone = startX > size.width * 0.68f && startY < size.height * 0.36f
-                            if (isTopRightZone && state.settings.topRightControlPanelEnabled) {
-                                onOpenControlPanel()
-                            } else if (state.settings.swipeDownSpotlightEnabled) {
-                                onOpenSpotlight()
-                            }
-                        } else if (accumDy < -32.dp.toPx()) {
-                            triggered = true
-                            when (state.settings.swipeUpAction) {
-                                SwipeUpAction.APP_LIBRARY -> {
-                                    if (showAppLibrary) {
-                                        scope.launch { pagerState.animateScrollToPage(workspacePages.size) }
-                                    }
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val startX = down.position.x
+                    val startY = down.position.y
+                    if (startY < 40.dp.toPx()) return@awaitEachGesture
+
+                    var totalDx = 0f
+                    var totalDy = 0f
+                    var directionDetermined = false
+                    var isVertical = false
+                    val touchSlop = viewConfiguration.touchSlop
+
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                        if (!change.pressed) break
+
+                        val dx = change.position.x - change.previousPosition.x
+                        val dy = change.position.y - change.previousPosition.y
+                        totalDx += dx
+                        totalDy += dy
+
+                        if (!directionDetermined) {
+                            val absX = kotlin.math.abs(totalDx)
+                            val absY = kotlin.math.abs(totalDy)
+                            if (absX > touchSlop || absY > touchSlop) {
+                                directionDetermined = true
+                                if (absY > absX * 1.35f) {
+                                    isVertical = true
+                                } else {
+                                    // Dominant horizontal motion: yield completely to HorizontalPager without consumption
+                                    break
                                 }
-                                SwipeUpAction.SPOTLIGHT -> onOpenSpotlight()
-                                SwipeUpAction.NONE -> Unit
                             }
                         }
-                    },
-                )
+
+                        if (isVertical) {
+                            change.consume()
+                            if (totalDy > 32.dp.toPx()) {
+                                val isTopRightZone = startX > size.width * 0.68f && startY < size.height * 0.36f
+                                if (isTopRightZone && state.settings.topRightControlPanelEnabled) {
+                                    onOpenControlPanel()
+                                } else if (state.settings.swipeDownSpotlightEnabled) {
+                                    onOpenSpotlight()
+                                }
+                                break
+                            } else if (totalDy < -32.dp.toPx()) {
+                                when (state.settings.swipeUpAction) {
+                                    SwipeUpAction.APP_LIBRARY -> {
+                                        if (showAppLibrary) {
+                                            scope.launch { pagerState.animateScrollToPage(workspacePages.size) }
+                                        }
+                                    }
+                                    SwipeUpAction.SPOTLIGHT -> onOpenSpotlight()
+                                    SwipeUpAction.NONE -> Unit
+                                }
+                                break
+                            }
+                        }
+                    }
+                }
             },
     ) {
         HorizontalPager(
             state = pagerState,
+            beyondViewportPageCount = 1,
             userScrollEnabled = !isDragging,
             modifier = Modifier.fillMaxSize(),
         ) { pageIndex ->
@@ -365,6 +403,10 @@ fun HomeScreen(
                     if (isEditMode) {
                         EditModeTopBar(
                             onAddWidget = { onOpenWidgetPicker(page?.id) },
+                            canUndo = canUndo,
+                            canRedo = canRedo,
+                            onUndo = viewModel::undo,
+                            onRedo = viewModel::redo,
                             onCycleWallpaper = viewModel::cycleWallpaperStyle,
                             onTidyUp = viewModel::packWorkspace,
                             onOpenPageManager = { showPageManagement = true },
@@ -427,10 +469,16 @@ fun HomeScreen(
                                     if (!hasRow0Item) {
                                         SmartGlanceHeader(
                                             onOpenSearch = onOpenSpotlight,
+                                            isEditMode = isEditMode,
+                                            onDelete = {
+                                                viewModel.removeSmartHeader()
+                                                onShowMessage(smartGlanceRemovedNotice)
+                                            },
                                             modifier = Modifier
                                                 .offset(x = 0.dp, y = 0.dp)
                                                 .size(width = maxWidth, height = cellH)
-                                                .padding(4.dp),
+                                                .padding(4.dp)
+                                                .zIndex(10f),
                                         )
                                     }
                                 }
@@ -506,11 +554,45 @@ fun HomeScreen(
                                                     change.consume()
                                                     draggedWindowPos += dragAmount
                                                     val gRect = gridBoundsInWindow
-                                                    if (gRect != null && gRect.contains(draggedWindowPos)) {
-                                                        val relX = (draggedWindowPos.x - gRect.left).coerceAtLeast(0f)
-                                                        val relY = (draggedWindowPos.y - gRect.top).coerceAtLeast(0f)
-                                                        val cellPxW = gRect.width / cols
-                                                        val cellPxH = gRect.height / rows
+
+                                                    // Screen-edge dwell switches workspace page or creates a new page
+                                                    if (draggedWindowPos.x <= edgeThresholdPx && pagerState.currentPage > 0) {
+                                                        if (edgeScrollJob?.isActive != true) {
+                                                            edgeScrollJob = scope.launch {
+                                                                delay(400L)
+                                                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                                pagerState.animateScrollToPage(pagerState.currentPage - 1)
+                                                            }
+                                                        }
+                                                    } else if (draggedWindowPos.x >= screenWidthPx - edgeThresholdPx) {
+                                                        if (pagerState.currentPage < workspacePages.lastIndex) {
+                                                            if (edgeScrollJob?.isActive != true) {
+                                                                edgeScrollJob = scope.launch {
+                                                                    delay(400L)
+                                                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                                    pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                                                                }
+                                                            }
+                                                        } else if (pagerState.currentPage == workspacePages.lastIndex) {
+                                                            if (edgeScrollJob?.isActive != true) {
+                                                                edgeScrollJob = scope.launch {
+                                                                    delay(550L)
+                                                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                                    viewModel.addNewPage { newIdx ->
+                                                                        scope.launch { pagerState.animateScrollToPage(newIdx) }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    } else {
+                                                        edgeScrollJob?.cancel()
+                                                    }
+
+                                                    if (gRect != null) {
+                                                        val relX = (draggedWindowPos.x - gRect.left).coerceIn(0f, gRect.width - 1f)
+                                                        val relY = (draggedWindowPos.y - gRect.top).coerceIn(0f, gRect.height - 1f)
+                                                        val cellPxW = (gRect.width / cols).coerceAtLeast(1f)
+                                                        val cellPxH = (gRect.height / rows).coerceAtLeast(1f)
                                                         val tx = (relX / cellPxW).toInt().coerceIn(0, cols - 1)
                                                         val ty = (relY / cellPxH).toInt().coerceIn(0, rows - 1)
                                                         val curPage = workspacePages.getOrNull(pagerState.currentPage)
@@ -523,29 +605,8 @@ fun HomeScreen(
                                                         val centerDistX = abs((relX % cellPxW) - cellPxW / 2f) / cellPxW
                                                         val centerDistY = abs((relY % cellPxH) - cellPxH / 2f) / cellPxH
                                                         hoveredItemId = if (occ != null && centerDistX < 0.32f && centerDistY < 0.32f) occ else null
-
-                                                        // 600ms dwell near horizontal screen edges switches workspace page (Appendix A).
-                                                        val edgePx = with(density) { 28.dp.toPx() }
-                                                        if (draggedWindowPos.x < gRect.left + edgePx && pagerState.currentPage > 0) {
-                                                            if (edgeScrollJob?.isActive != true) {
-                                                                edgeScrollJob = scope.launch {
-                                                                    delay(600L)
-                                                                    pagerState.animateScrollToPage(pagerState.currentPage - 1)
-                                                                }
-                                                            }
-                                                        } else if (draggedWindowPos.x > gRect.right - edgePx && pagerState.currentPage < workspacePages.lastIndex) {
-                                                            if (edgeScrollJob?.isActive != true) {
-                                                                edgeScrollJob = scope.launch {
-                                                                    delay(600L)
-                                                                    pagerState.animateScrollToPage(pagerState.currentPage + 1)
-                                                                }
-                                                            }
-                                                        } else {
-                                                            edgeScrollJob?.cancel()
-                                                        }
                                                     } else {
                                                         hoveredItemId = null
-                                                        edgeScrollJob?.cancel()
                                                     }
                                                 },
                                                 onDragCancel = {
@@ -568,13 +629,15 @@ fun HomeScreen(
                                                                 .coerceIn(0, slots - 1)
                                                             DropTarget.DockSlot(rank)
                                                         }
-                                                        gRect != null && gRect.contains(draggedWindowPos) -> {
+                                                        gRect != null -> {
                                                             val curPage = workspacePages.getOrNull(pagerState.currentPage)
                                                             if (curPage != null) {
-                                                                val tx = (((draggedWindowPos.x - gRect.left) / (gRect.width / cols)).toInt())
-                                                                    .coerceIn(0, cols - 1)
-                                                                val ty = (((draggedWindowPos.y - gRect.top) / (gRect.height / rows)).toInt())
-                                                                    .coerceIn(0, rows - 1)
+                                                                val clampedX = (draggedWindowPos.x - gRect.left).coerceIn(0f, gRect.width - 1f)
+                                                                val clampedY = (draggedWindowPos.y - gRect.top).coerceIn(0f, gRect.height - 1f)
+                                                                val cellW = (gRect.width / cols).coerceAtLeast(1f)
+                                                                val cellH = (gRect.height / rows).coerceAtLeast(1f)
+                                                                val tx = (clampedX / cellW).toInt().coerceIn(0, cols - 1)
+                                                                val ty = (clampedY / cellH).toInt().coerceIn(0, rows - 1)
                                                                 DropTarget.DesktopCell(curPage.id, tx, ty)
                                                             } else {
                                                                 null
@@ -827,11 +890,45 @@ fun HomeScreen(
                                                 change.consume()
                                                 draggedWindowPos += dragAmount
                                                 val gRect = gridBoundsInWindow
-                                                if (gRect != null && gRect.contains(draggedWindowPos)) {
-                                                    val relX = (draggedWindowPos.x - gRect.left).coerceAtLeast(0f)
-                                                    val relY = (draggedWindowPos.y - gRect.top).coerceAtLeast(0f)
-                                                    val cellPxW = gRect.width / gridCols
-                                                    val cellPxH = gRect.height / gridRows
+
+                                                // Screen-edge dwell switches workspace page or creates a new page
+                                                if (draggedWindowPos.x <= edgeThresholdPx && pagerState.currentPage > 0) {
+                                                    if (edgeScrollJob?.isActive != true) {
+                                                        edgeScrollJob = scope.launch {
+                                                            delay(400L)
+                                                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                            pagerState.animateScrollToPage(pagerState.currentPage - 1)
+                                                        }
+                                                    }
+                                                } else if (draggedWindowPos.x >= screenWidthPx - edgeThresholdPx) {
+                                                    if (pagerState.currentPage < workspacePages.lastIndex) {
+                                                        if (edgeScrollJob?.isActive != true) {
+                                                            edgeScrollJob = scope.launch {
+                                                                delay(400L)
+                                                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                                pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                                                            }
+                                                        }
+                                                    } else if (pagerState.currentPage == workspacePages.lastIndex) {
+                                                        if (edgeScrollJob?.isActive != true) {
+                                                            edgeScrollJob = scope.launch {
+                                                                delay(550L)
+                                                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                                viewModel.addNewPage { newIdx ->
+                                                                    scope.launch { pagerState.animateScrollToPage(newIdx) }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                } else {
+                                                    edgeScrollJob?.cancel()
+                                                }
+
+                                                if (gRect != null) {
+                                                    val relX = (draggedWindowPos.x - gRect.left).coerceIn(0f, gRect.width - 1f)
+                                                    val relY = (draggedWindowPos.y - gRect.top).coerceIn(0f, gRect.height - 1f)
+                                                    val cellPxW = (gRect.width / gridCols).coerceAtLeast(1f)
+                                                    val cellPxH = (gRect.height / gridRows).coerceAtLeast(1f)
                                                     val tx = (relX / cellPxW).toInt().coerceIn(0, gridCols - 1)
                                                     val ty = (relY / cellPxH).toInt().coerceIn(0, gridRows - 1)
                                                     val curPage = workspacePages.getOrNull(pagerState.currentPage)
@@ -849,10 +946,12 @@ fun HomeScreen(
                                                 }
                                             },
                                             onDragCancel = {
+                                                edgeScrollJob?.cancel()
                                                 hoveredItemId = null
                                                 viewModel.cancelDrag()
                                             },
                                             onDragEnd = {
+                                                edgeScrollJob?.cancel()
                                                 val dRect = dockBoundsInWindow
                                                 val gRect = gridBoundsInWindow
                                                 val hoverId = hoveredItemId
@@ -866,13 +965,15 @@ fun HomeScreen(
                                                             .coerceIn(0, slotsCount - 1)
                                                         DropTarget.DockSlot(rank)
                                                     }
-                                                    gRect != null && gRect.contains(draggedWindowPos) -> {
+                                                    gRect != null -> {
                                                         val curPage = workspacePages.getOrNull(pagerState.currentPage)
                                                         if (curPage != null) {
-                                                            val tx = (((draggedWindowPos.x - gRect.left) / (gRect.width / gridCols)).toInt())
-                                                                .coerceIn(0, gridCols - 1)
-                                                            val ty = (((draggedWindowPos.y - gRect.top) / (gRect.height / gridRows)).toInt())
-                                                                .coerceIn(0, gridRows - 1)
+                                                            val clampedX = (draggedWindowPos.x - gRect.left).coerceIn(0f, gRect.width - 1f)
+                                                            val clampedY = (draggedWindowPos.y - gRect.top).coerceIn(0f, gRect.height - 1f)
+                                                            val cellW = (gRect.width / gridCols).coerceAtLeast(1f)
+                                                            val cellH = (gRect.height / gridRows).coerceAtLeast(1f)
+                                                            val tx = (clampedX / cellW).toInt().coerceIn(0, gridCols - 1)
+                                                            val ty = (clampedY / cellH).toInt().coerceIn(0, gridRows - 1)
                                                             DropTarget.DesktopCell(curPage.id, tx, ty)
                                                         } else {
                                                             null
@@ -1241,6 +1342,7 @@ fun HomeScreen(
             hiddenPageIds = state.settings.hiddenPageIds,
             currentPageIndex = pagerState.currentPage,
             onToggleVisibility = viewModel::togglePageVisibility,
+            onAddPage = { viewModel.addNewPage() },
             onDeletePage = { pageId ->
                 viewModel.deletePage(pageId)
             },
@@ -1296,6 +1398,10 @@ private fun PreviewModeBanner(
 @Composable
 private fun EditModeTopBar(
     onAddWidget: () -> Unit,
+    canUndo: Boolean,
+    canRedo: Boolean,
+    onUndo: () -> Unit,
+    onRedo: () -> Unit,
     onCycleWallpaper: () -> Unit,
     onTidyUp: () -> Unit,
     onOpenPageManager: () -> Unit,
@@ -1313,7 +1419,7 @@ private fun EditModeTopBar(
             .clip(RoundedCornerShape(AuroraRadii.card))
             .background(palette.surface.copy(alpha = 0.95f))
             .border(1.dp, palette.outline.copy(alpha = 0.35f), RoundedCornerShape(AuroraRadii.card))
-            .padding(horizontal = 10.dp, vertical = 6.dp),
+            .padding(horizontal = 8.dp, vertical = 6.dp),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -1322,7 +1428,7 @@ private fun EditModeTopBar(
                 .clip(RoundedCornerShape(AuroraRadii.input))
                 .background(palette.surfaceVariant)
                 .clickable(onClick = onAddWidget)
-                .padding(horizontal = 12.dp, vertical = 6.dp),
+                .padding(horizontal = 10.dp, vertical = 6.dp),
         ) {
             Icon(
                 imageVector = Icons.Outlined.Widgets,
@@ -1330,7 +1436,7 @@ private fun EditModeTopBar(
                 tint = palette.accent,
                 modifier = Modifier.size(18.dp),
             )
-            Spacer(Modifier.width(6.dp))
+            Spacer(Modifier.width(4.dp))
             Text(
                 text = stringResource(R.string.edit_bar_widgets),
                 style = AuroraTypography.labelMedium,
@@ -1343,50 +1449,74 @@ private fun EditModeTopBar(
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             IconButton(
+                onClick = onUndo,
+                enabled = canUndo,
+                modifier = Modifier.size(34.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.Undo,
+                    contentDescription = stringResource(R.string.action_undo),
+                    tint = if (canUndo) palette.onSurface else palette.onSurface.copy(alpha = 0.25f),
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+            IconButton(
+                onClick = onRedo,
+                enabled = canRedo,
+                modifier = Modifier.size(34.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.Redo,
+                    contentDescription = stringResource(R.string.action_redo),
+                    tint = if (canRedo) palette.onSurface else palette.onSurface.copy(alpha = 0.25f),
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+            IconButton(
                 onClick = onCycleWallpaper,
-                modifier = Modifier.size(38.dp),
+                modifier = Modifier.size(34.dp),
             ) {
                 Icon(
                     imageVector = Icons.Outlined.Wallpaper,
                     contentDescription = stringResource(R.string.edit_bar_wallpaper),
                     tint = palette.onSurface,
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(18.dp),
                 )
             }
             IconButton(
                 onClick = onTidyUp,
-                modifier = Modifier.size(38.dp),
+                modifier = Modifier.size(34.dp),
             ) {
                 Icon(
                     imageVector = Icons.Outlined.AutoAwesome,
                     contentDescription = stringResource(R.string.edit_bar_tidy),
                     tint = palette.accent,
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(18.dp),
                 )
             }
             IconButton(
                 onClick = onOpenPageManager,
-                modifier = Modifier.size(38.dp),
+                modifier = Modifier.size(34.dp),
             ) {
                 Icon(
                     imageVector = Icons.Outlined.Layers,
                     contentDescription = stringResource(R.string.edit_bar_pages),
                     tint = palette.accent,
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(18.dp),
                 )
             }
             IconButton(
                 onClick = onOpenSettings,
-                modifier = Modifier.size(38.dp),
+                modifier = Modifier.size(34.dp),
             ) {
                 Icon(
                     imageVector = Icons.Outlined.Settings,
                     contentDescription = stringResource(R.string.edit_bar_settings),
                     tint = palette.onSurface,
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(18.dp),
                 )
             }
         }
@@ -1512,6 +1642,8 @@ private fun desktopCoords(item: WorkspaceItem): Quad? = when (item) {
 @Composable
 private fun SmartGlanceHeader(
     onOpenSearch: () -> Unit,
+    isEditMode: Boolean = false,
+    onDelete: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -1608,6 +1740,32 @@ private fun SmartGlanceHeader(
                 }
             }
         }
+
+        if (isEditMode) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .offset(x = (-6).dp, y = (-6).dp)
+                    .defaultMinSize(minWidth = 44.dp, minHeight = 44.dp)
+                    .clickable(onClick = onDelete),
+            ) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(26.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFE53935)),
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Remove,
+                        contentDescription = stringResource(R.string.smart_glance_delete_cd),
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -1617,35 +1775,36 @@ private fun PageManagementOverlay(
     hiddenPageIds: Set<Long>,
     currentPageIndex: Int,
     onToggleVisibility: (PageId) -> Unit,
+    onAddPage: () -> Unit,
     onDeletePage: (PageId) -> Unit,
     onDismiss: () -> Unit,
 ) {
     BackHandler(onBack = onDismiss)
     val palette = AuroraTheme.palette
+    var pagePendingDelete by remember { mutableStateOf<WorkspacePage?>(null) }
 
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.72f))
             .statusBarsPadding()
-            .navigationBarsPadding()
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onDismiss,
-            )
-            .padding(horizontal = AuroraSpacing.lg, vertical = AuroraSpacing.md),
+            .navigationBarsPadding(),
     ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.72f))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDismiss,
+                ),
+        )
         Column(
             modifier = Modifier
                 .widthIn(max = 540.dp)
                 .fillMaxSize()
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = {},
-                ),
+                .padding(horizontal = AuroraSpacing.lg, vertical = AuroraSpacing.md),
             verticalArrangement = Arrangement.spacedBy(AuroraSpacing.md),
         ) {
             Row(
@@ -1700,84 +1859,102 @@ private fun PageManagementOverlay(
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                onToggleVisibility(page.id)
-                            },
+                        modifier = Modifier.fillMaxWidth(),
                     ) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(190.dp)
-                                .clip(RoundedCornerShape(18.dp))
-                                .background(palette.surfaceVariant.copy(alpha = if (isHidden) 0.35f else 0.88f))
-                                .border(
-                                    width = if (isCurrent) 2.dp else 1.dp,
-                                    color = if (isCurrent) palette.accent else palette.glassHairline.copy(alpha = 0.25f),
-                                    shape = RoundedCornerShape(18.dp),
-                                )
-                                .padding(10.dp),
+                                .height(190.dp),
                         ) {
-                            if (itemCount == 0) {
-                                Box(
-                                    contentAlignment = Alignment.Center,
-                                    modifier = Modifier.fillMaxSize(),
-                                ) {
-                                    Text(
-                                        text = stringResource(R.string.pages_manager_empty),
-                                        style = AuroraTypography.labelSmall,
-                                        color = palette.onSurfaceSecondary,
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(RoundedCornerShape(18.dp))
+                                    .background(palette.surfaceVariant.copy(alpha = if (isHidden) 0.35f else 0.88f))
+                                    .border(
+                                        width = if (isCurrent) 2.dp else 1.dp,
+                                        color = if (isCurrent) palette.accent else palette.glassHairline.copy(alpha = 0.25f),
+                                        shape = RoundedCornerShape(18.dp),
                                     )
-                                }
-                            } else {
-                                Column(
-                                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                                    modifier = Modifier.fillMaxSize(),
-                                ) {
-                                    val rows = 4
-                                    val cols = 4
-                                    for (r in 0 until rows) {
-                                        Row(
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                            modifier = Modifier.fillMaxWidth(),
-                                        ) {
-                                            for (c in 0 until cols) {
-                                                val hasItem = (r * cols + c) < itemCount
-                                                Box(
-                                                    modifier = Modifier
-                                                        .weight(1f)
-                                                        .height(26.dp)
-                                                        .clip(RoundedCornerShape(6.dp))
-                                                        .background(
-                                                            if (hasItem) {
-                                                                palette.accent.copy(alpha = if (isHidden) 0.25f else 0.65f)
-                                                            } else {
-                                                                Color.Transparent
-                                                            },
-                                                        ),
-                                                )
+                                    .clickable {
+                                        onToggleVisibility(page.id)
+                                    }
+                                    .padding(10.dp),
+                            ) {
+                                if (itemCount == 0) {
+                                    Box(
+                                        contentAlignment = Alignment.Center,
+                                        modifier = Modifier.fillMaxSize(),
+                                    ) {
+                                        Text(
+                                            text = stringResource(R.string.pages_manager_empty),
+                                            style = AuroraTypography.labelSmall,
+                                            color = palette.onSurfaceSecondary,
+                                        )
+                                    }
+                                } else {
+                                    Column(
+                                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                                        modifier = Modifier.fillMaxSize(),
+                                    ) {
+                                        val rows = 4
+                                        val cols = 4
+                                        for (r in 0 until rows) {
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                                modifier = Modifier.fillMaxWidth(),
+                                            ) {
+                                                for (c in 0 until cols) {
+                                                    val hasItem = (r * cols + c) < itemCount
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .weight(1f)
+                                                            .height(26.dp)
+                                                            .clip(RoundedCornerShape(6.dp))
+                                                            .background(
+                                                                if (hasItem) {
+                                                                    palette.accent.copy(alpha = if (isHidden) 0.25f else 0.65f)
+                                                                } else {
+                                                                    Color.Transparent
+                                                                },
+                                                            ),
+                                                    )
+                                                }
                                             }
                                         }
                                     }
                                 }
                             }
 
-                            if (itemCount == 0 && pages.size > 1) {
-                                IconButton(
-                                    onClick = { onDeletePage(page.id) },
+                            if (pages.size > 1) {
+                                Box(
+                                    contentAlignment = Alignment.Center,
                                     modifier = Modifier
                                         .align(Alignment.TopEnd)
-                                        .size(28.dp)
-                                        .clip(CircleShape)
-                                        .background(palette.error.copy(alpha = 0.9f)),
+                                        .size(44.dp)
+                                        .zIndex(20f)
+                                        .clickable {
+                                            if (itemCount > 0) {
+                                                pagePendingDelete = page
+                                            } else {
+                                                onDeletePage(page.id)
+                                            }
+                                        },
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.DeleteOutline,
-                                        contentDescription = stringResource(R.string.pages_manager_delete),
-                                        tint = Color.White,
-                                        modifier = Modifier.size(16.dp),
-                                    )
+                                    Box(
+                                        contentAlignment = Alignment.Center,
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .clip(CircleShape)
+                                            .background(palette.error.copy(alpha = 0.95f)),
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.DeleteOutline,
+                                            contentDescription = stringResource(R.string.pages_manager_delete),
+                                            tint = Color.White,
+                                            modifier = Modifier.size(16.dp),
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -1785,6 +1962,7 @@ private fun PageManagementOverlay(
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.clickable { onToggleVisibility(page.id) },
                         ) {
                             Icon(
                                 imageVector = if (!isHidden) Icons.Outlined.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
@@ -1801,7 +1979,74 @@ private fun PageManagementOverlay(
                         }
                     }
                 }
+
+                item(key = "add_page_card") {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(190.dp)
+                                .clip(RoundedCornerShape(18.dp))
+                                .background(palette.surfaceVariant.copy(alpha = 0.45f))
+                                .border(
+                                    width = 1.dp,
+                                    color = palette.accent.copy(alpha = 0.6f),
+                                    shape = RoundedCornerShape(18.dp),
+                                )
+                                .clickable(onClick = onAddPage),
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Add,
+                                    contentDescription = stringResource(R.string.page_manager_add_page),
+                                    tint = palette.accent,
+                                    modifier = Modifier.size(36.dp),
+                                )
+                                Text(
+                                    text = stringResource(R.string.page_manager_add_page),
+                                    style = AuroraTypography.labelMedium,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(20.dp))
+                    }
+                }
             }
         }
+    }
+
+    val deleteTarget = pagePendingDelete
+    if (deleteTarget != null) {
+        AlertDialog(
+            onDismissRequest = { pagePendingDelete = null },
+            title = { Text(stringResource(R.string.page_manager_delete_confirm_title)) },
+            text = { Text(stringResource(R.string.page_manager_delete_confirm_body)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val target = deleteTarget
+                        pagePendingDelete = null
+                        onDeletePage(target.id)
+                    },
+                ) {
+                    Text(stringResource(R.string.pages_manager_delete), color = palette.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pagePendingDelete = null }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
     }
 }

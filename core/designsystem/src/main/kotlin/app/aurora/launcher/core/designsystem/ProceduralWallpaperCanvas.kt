@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import app.aurora.launcher.core.model.WallpaperStyle
 import kotlinx.coroutines.Dispatchers
@@ -46,7 +47,7 @@ fun ProceduralWallpaperCanvas(
         }
     }
 
-    Canvas(modifier = modifier.fillMaxSize()) {
+    Canvas(modifier = modifier.fillMaxSize().graphicsLayer()) {
         val w = size.width
         val h = size.height
 

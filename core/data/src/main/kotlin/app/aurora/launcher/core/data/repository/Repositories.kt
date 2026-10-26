@@ -64,7 +64,10 @@ interface WorkspaceRepository {
         gridSpec: GridSpec,
     ): Boolean
     suspend fun packWorkspace(gridSpec: GridSpec)
+    suspend fun addPage(gridSpec: GridSpec): PageId
     suspend fun deletePage(pageId: PageId, gridSpec: GridSpec): Boolean
+    suspend fun addAppToSpecificPage(component: ComponentKey, pageId: PageId, gridSpec: GridSpec): Boolean
+    suspend fun restoreSnapshot(snapshot: WorkspaceSnapshot): Boolean
     suspend fun reflowToGrid(currentSpec: GridSpec, targetSpec: GridSpec)
     suspend fun restoreLatestSnapshot(): Boolean
     suspend fun restoreSnapshotById(snapshotId: Long): Boolean

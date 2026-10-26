@@ -71,15 +71,21 @@ import app.aurora.launcher.core.model.AppLibraryClassifier
 import app.aurora.launcher.core.model.ComponentKey
 import app.aurora.launcher.core.model.LauncherSettings
 import app.aurora.launcher.core.model.LibraryGroup
+import app.aurora.launcher.core.model.PageId
 import app.aurora.launcher.core.model.SpotlightSearchEngine
+import app.aurora.launcher.core.model.WorkspacePage
 import app.aurora.launcher.core.platform.IconCacheAndLoader
 import app.aurora.launcher.core.platform.LauncherAppsGateway
 import app.aurora.launcher.core.platform.rememberAppIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -94,6 +100,7 @@ data class AppLibraryUiState(
     val settings: LauncherSettings = LauncherSettings(),
 )
 
+@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class AppLibraryViewModel @Inject constructor(
     private val appCatalogRepository: AppCatalogRepository,
@@ -104,6 +111,16 @@ class AppLibraryViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val filterFlow = MutableStateFlow("")
+
+    val workspacePages: StateFlow<List<WorkspacePage>> = settingsRepository.settings.flatMapLatest { settings ->
+        val spec = settings.effectiveGridSpec(false)
+        workspaceRepository.observeWorkspace(flowOf(spec))
+    }.map { it.pages }
+     .stateIn(
+         scope = viewModelScope,
+         started = SharingStarted.WhileSubscribed(5_000),
+         initialValue = emptyList(),
+     )
 
     val uiState: StateFlow<AppLibraryUiState> = combine(
         appCatalogRepository.allApps,
@@ -157,6 +174,32 @@ class AppLibraryViewModel @Inject constructor(
         }
     }
 
+    fun addAppToSpecificPage(
+        app: AppEntry,
+        pageId: PageId,
+        isTablet: Boolean,
+        onResult: (Boolean) -> Unit,
+    ) {
+        viewModelScope.launch {
+            val spec = uiState.value.settings.effectiveGridSpec(isTablet)
+            val added = workspaceRepository.addAppToSpecificPage(app.key, pageId, spec)
+            onResult(added)
+        }
+    }
+
+    fun addAppToNewPage(
+        app: AppEntry,
+        isTablet: Boolean,
+        onResult: (Boolean) -> Unit,
+    ) {
+        viewModelScope.launch {
+            val spec = uiState.value.settings.effectiveGridSpec(isTablet)
+            val newPageId = workspaceRepository.addPage(spec)
+            val added = workspaceRepository.addAppToSpecificPage(app.key, newPageId, spec)
+            onResult(added)
+        }
+    }
+
     fun setAppHidden(key: ComponentKey, hidden: Boolean) {
         viewModelScope.launch {
             appCatalogRepository.setAppHidden(key, hidden)
@@ -194,11 +237,13 @@ fun AppLibraryPage(
     viewModel: AppLibraryViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val workspacePages by viewModel.workspacePages.collectAsStateWithLifecycle()
     val palette = AuroraTheme.palette
 
     var showAlphabetical by rememberSaveable { mutableStateOf(false) }
     var expandedCluster by remember { mutableStateOf<Pair<String, List<AppEntry>>?>(null) }
     var actionTargetApp by remember { mutableStateOf<AppEntry?>(null) }
+    var pageSelectTargetApp by remember { mutableStateOf<AppEntry?>(null) }
     var categoryPickerTarget by remember { mutableStateOf<AppEntry?>(null) }
 
     val addedMsg = stringResource(R.string.home_grid_added_notice)
@@ -433,10 +478,9 @@ fun AppLibraryPage(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(AuroraSpacing.xs)) {
                     ActionSheetRow(stringResource(R.string.quick_action_add_to_home)) {
+                        val target = currentActionApp
                         actionTargetApp = null
-                        viewModel.addAppToWorkspace(currentActionApp, isTabletViewport) { ok ->
-                            onShowMessage(if (ok) addedMsg else fullMsg)
-                        }
+                        pageSelectTargetApp = target
                     }
                     ActionSheetRow(stringResource(R.string.quick_action_category_override)) {
                         actionTargetApp = null
@@ -470,6 +514,41 @@ fun AppLibraryPage(
             },
             confirmButton = {
                 TextButton(onClick = { actionTargetApp = null }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
+
+    val selectingApp = pageSelectTargetApp
+    if (selectingApp != null) {
+        AlertDialog(
+            onDismissRequest = { pageSelectTargetApp = null },
+            title = { Text(stringResource(R.string.library_select_page_title)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(AuroraSpacing.xs)) {
+                    workspacePages.forEachIndexed { idx, page ->
+                        ActionSheetRow(
+                            label = stringResource(R.string.library_select_page_item, idx + 1),
+                        ) {
+                            pageSelectTargetApp = null
+                            viewModel.addAppToSpecificPage(selectingApp, page.id, isTabletViewport) { ok ->
+                                onShowMessage(if (ok) addedMsg else fullMsg)
+                            }
+                        }
+                    }
+                    ActionSheetRow(
+                        label = stringResource(R.string.library_select_page_new),
+                    ) {
+                        pageSelectTargetApp = null
+                        viewModel.addAppToNewPage(selectingApp, isTabletViewport) { ok ->
+                            onShowMessage(if (ok) addedMsg else fullMsg)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { pageSelectTargetApp = null }) {
                     Text(stringResource(R.string.action_cancel))
                 }
             },

@@ -28,6 +28,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
@@ -69,6 +70,68 @@ class HomeViewModel @Inject constructor(
     private val isTabletFlow = MutableStateFlow(false)
     private val modeFlow = MutableStateFlow<HomeUiMode>(HomeUiMode.Normal)
     private val quickActionsFlow = MutableStateFlow<QuickActionsTarget?>(null)
+
+    private val undoStack = ArrayDeque<WorkspaceSnapshot>()
+    private val redoStack = ArrayDeque<WorkspaceSnapshot>()
+
+    private val _canUndo = MutableStateFlow(false)
+    val canUndo: StateFlow<Boolean> = _canUndo.asStateFlow()
+
+    private val _canRedo = MutableStateFlow(false)
+    val canRedo: StateFlow<Boolean> = _canRedo.asStateFlow()
+
+    private fun updateHistoryFlags() {
+        _canUndo.value = undoStack.isNotEmpty()
+        _canRedo.value = redoStack.isNotEmpty()
+    }
+
+    private fun pushUndo(snapshot: WorkspaceSnapshot) {
+        if (undoStack.size >= 20) {
+            undoStack.removeFirst()
+        }
+        undoStack.addLast(snapshot)
+        redoStack.clear()
+        updateHistoryFlags()
+    }
+
+    fun undo() {
+        if (undoStack.isEmpty()) return
+        val current = uiState.value.workspace
+        val target = undoStack.removeLast()
+        redoStack.addLast(current)
+        updateHistoryFlags()
+        viewModelScope.launch {
+            workspaceRepository.restoreSnapshot(target)
+        }
+    }
+
+    fun redo() {
+        if (redoStack.isEmpty()) return
+        val current = uiState.value.workspace
+        val target = redoStack.removeLast()
+        undoStack.addLast(current)
+        updateHistoryFlags()
+        viewModelScope.launch {
+            workspaceRepository.restoreSnapshot(target)
+        }
+    }
+
+    fun removeSmartHeader() {
+        viewModelScope.launch {
+            settingsRepository.updateSettings { it.copy(showSmartHeaderOnPage1 = false) }
+        }
+    }
+
+    fun addNewPage(onCreated: ((Int) -> Unit)? = null) {
+        val currentSnap = uiState.value.workspace
+        pushUndo(currentSnap)
+        viewModelScope.launch {
+            val spec = uiState.value.workspace.gridSpec
+            workspaceRepository.addPage(spec)
+            val newIdx = uiState.value.workspace.pages.size
+            onCreated?.invoke(newIdx)
+        }
+    }
     private var activeDragLease: AutoCloseable? = null
 
     private val gridSpecFlow = combine(
@@ -163,6 +226,8 @@ class HomeViewModel @Inject constructor(
             return
         }
 
+        pushUndo(snapshot)
+
         viewModelScope.launch {
             workspaceRepository.applyDrop(snapshot, resolution)
             if (uiState.value.settings.autoReflowGrid) {
@@ -247,6 +312,7 @@ class HomeViewModel @Inject constructor(
 
     fun removeItemFromHome(itemId: ItemId) {
         dismissQuickActions()
+        pushUndo(uiState.value.workspace)
         viewModelScope.launch {
             val removedWidgetIds = workspaceRepository.removeItemFromHome(itemId)
             removedWidgetIds.forEach { widgetHostManager.deleteWidgetId(it.value) }
@@ -332,6 +398,7 @@ class HomeViewModel @Inject constructor(
 
     fun packWorkspace() {
         val spec = uiState.value.workspace.gridSpec
+        pushUndo(uiState.value.workspace)
         viewModelScope.launch {
             workspaceRepository.packWorkspace(spec)
         }
@@ -357,6 +424,7 @@ class HomeViewModel @Inject constructor(
 
     fun deletePage(pageId: PageId, onResult: (Boolean) -> Unit = {}) {
         val spec = uiState.value.workspace.gridSpec
+        pushUndo(uiState.value.workspace)
         viewModelScope.launch {
             val ok = workspaceRepository.deletePage(pageId, spec)
             if (ok) {

@@ -23,6 +23,7 @@
     <string name="action_cancel">Batal</string>
     <string name="action_close">Tutup</string>
     <string name="action_undo">Urungkan</string>
+    <string name="action_redo">Ulangi</string>
     <string name="action_remove">Hapus</string>
     <string name="action_confirm">Konfirmasi</string>
     <string name="action_retry">Coba Lagi</string>
@@ -279,4 +280,14 @@
     <string name="settings_smart_header_subtitle">Tampilkan jam, tanggal, dan bilah pencarian Google di bagian atas halaman 1</string>
     <string name="smart_glance_search_hint">Telusuri Google atau web...</string>
     <string name="spotlight_voice_cd">Pencarian suara</string>
+    <string name="page_manager_add_page">Tambah Halaman</string>
+    <string name="page_manager_delete_confirm_title">Hapus Halaman?</string>
+    <string name="page_manager_delete_confirm_body">Aplikasi pada halaman ini akan dipindahkan ke halaman yang tersisa.</string>
+    <string name="library_select_page_title">Tambah ke Halaman Mana?</string>
+    <string name="library_select_page_item">Halaman %1$d</string>
+    <string name="library_select_page_new">+ Halaman Baru Kosong</string>
+    <string name="smart_glance_widget_title">Aurora Smart Glance</string>
+    <string name="smart_glance_widget_desc">Jam digital, tanggal, dan pencarian Google</string>
+    <string name="smart_glance_removed_notice">Smart Glance dihapus dari halaman 1.</string>
+    <string name="smart_glance_delete_cd">Hapus Smart Glance</string>
 </resources>

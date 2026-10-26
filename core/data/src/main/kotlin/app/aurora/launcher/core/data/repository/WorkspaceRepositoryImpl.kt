@@ -217,14 +217,6 @@ class WorkspaceRepositoryImpl @Inject constructor(
     override suspend fun addAppToHome(component: ComponentKey, gridSpec: GridSpec): Boolean {
         return database.withTransaction {
             val current = loadCurrentSnapshot(gridSpec)
-            val alreadyPresent = (current.pages.flatMap { it.items } + current.dockItems).any { item ->
-                when (item) {
-                    is WorkspaceItem.App -> item.component == component
-                    is WorkspaceItem.Folder -> item.children.any { it.component == component }
-                    else -> false
-                }
-            }
-            if (alreadyPresent) return@withTransaction true
 
             for (page in current.pages) {
                 val free = GridOccupancyEngine.findFirstFreeSpan(
@@ -490,6 +482,21 @@ class WorkspaceRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun addPage(gridSpec: GridSpec): PageId {
+        return database.withTransaction {
+            val current = loadCurrentSnapshot(gridSpec)
+            val newPageId = PageId(nextItemId().value)
+            val newPage = WorkspacePage(
+                id = newPageId,
+                position = current.pages.size,
+                items = emptyList(),
+            )
+            saveSnapshotInternal(current, reason = "Add page ${newPageId.value}")
+            persistSnapshotInternal(current.copy(pages = current.pages + newPage))
+            newPageId
+        }
+    }
+
     override suspend fun deletePage(pageId: PageId, gridSpec: GridSpec): Boolean {
         return database.withTransaction {
             val current = loadCurrentSnapshot(gridSpec)
@@ -497,8 +504,72 @@ class WorkspaceRepositoryImpl @Inject constructor(
             val targetPage = current.pages.firstOrNull { it.id == pageId } ?: return@withTransaction false
             saveSnapshotInternal(current, reason = "Delete page ${pageId.value}")
             val remainingPages = current.pages.filter { it.id != pageId }
-                .mapIndexed { idx, p -> p.copy(position = idx) }
-            persistSnapshotInternal(current.copy(pages = remainingPages))
+            val targetItems = targetPage.items
+            val relocatedPages = if (targetItems.isNotEmpty()) {
+                var tempPages = remainingPages.toMutableList()
+                for (item in targetItems) {
+                    var placed = false
+                    for (pIdx in tempPages.indices) {
+                        if (placed) break
+                        val p = tempPages[pIdx]
+                        val span = GridOccupancyEngine.itemSpan(item)
+                        val free = GridOccupancyEngine.findFirstFreeSpan(p.items, gridSpec.columns, gridSpec.rows, span.first, span.second)
+                        if (free != null) {
+                            placed = true
+                            val relocatedItem = when (item) {
+                                is WorkspaceItem.App -> item.copy(placement = LeafPlacement.Desktop(p.id, free.first, free.second))
+                                is WorkspaceItem.PinnedShortcut -> item.copy(placement = LeafPlacement.Desktop(p.id, free.first, free.second))
+                                is WorkspaceItem.Folder -> item.copy(placement = ContainerPlacement.Desktop(p.id, free.first, free.second))
+                                is WorkspaceItem.Widget -> item.copy(pageId = p.id, cellX = free.first, cellY = free.second)
+                                is WorkspaceItem.WidgetStack -> item.copy(pageId = p.id, cellX = free.first, cellY = free.second)
+                            }
+                            tempPages[pIdx] = p.copy(items = p.items + relocatedItem)
+                        }
+                    }
+                }
+                tempPages
+            } else {
+                remainingPages
+            }
+            val normalizedPages = relocatedPages.mapIndexed { idx, p -> p.copy(position = idx) }
+            persistSnapshotInternal(current.copy(pages = normalizedPages))
+            true
+        }
+    }
+
+    override suspend fun addAppToSpecificPage(
+        component: ComponentKey,
+        pageId: PageId,
+        gridSpec: GridSpec,
+    ): Boolean {
+        return database.withTransaction {
+            val current = loadCurrentSnapshot(gridSpec)
+            val targetPage = current.pages.firstOrNull { it.id == pageId } ?: return@withTransaction false
+            val free = GridOccupancyEngine.findFirstFreeSpan(
+                items = targetPage.items,
+                columns = gridSpec.columns,
+                rows = gridSpec.rows,
+                spanX = 1,
+                spanY = 1,
+            ) ?: return@withTransaction false
+
+            val newItem = WorkspaceItem.App(
+                id = nextItemId(),
+                placement = LeafPlacement.Desktop(targetPage.id, free.first, free.second),
+                component = component,
+            )
+            saveSnapshotInternal(current, reason = "Add app to page ${pageId.value}")
+            val updatedPages = current.pages.map {
+                if (it.id == targetPage.id) it.copy(items = it.items + newItem) else it
+            }
+            persistSnapshotInternal(current.copy(pages = updatedPages))
+            true
+        }
+    }
+
+    override suspend fun restoreSnapshot(snapshot: WorkspaceSnapshot): Boolean {
+        return database.withTransaction {
+            persistSnapshotInternal(snapshot)
             true
         }
     }

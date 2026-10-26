@@ -80,6 +80,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import app.aurora.launcher.core.data.repository.LauncherSettingsRepository
 import app.aurora.launcher.core.data.repository.WorkspaceRepository
 import app.aurora.launcher.core.designsystem.AuroraRadii
 import app.aurora.launcher.core.designsystem.AuroraSpacing
@@ -108,16 +109,33 @@ data class WidgetPickerUiState(
     val isLoading: Boolean = true,
     val query: String = "",
     val candidates: List<WidgetProviderCandidate> = emptyList(),
+    val showSmartGlanceCandidate: Boolean = false,
 )
 
 @HiltViewModel
 class WidgetPickerViewModel @Inject constructor(
     val hostManager: AppWidgetHostManager,
     private val workspaceRepository: WorkspaceRepository,
+    private val settingsRepository: LauncherSettingsRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(WidgetPickerUiState())
     val uiState: StateFlow<WidgetPickerUiState> = _uiState.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            settingsRepository.settings.collect { s ->
+                _uiState.value = _uiState.value.copy(showSmartGlanceCandidate = !s.showSmartHeaderOnPage1)
+            }
+        }
+    }
+
+    fun restoreSmartHeader(onComplete: () -> Unit) {
+        viewModelScope.launch {
+            settingsRepository.updateSettings { it.copy(showSmartHeaderOnPage1 = true) }
+            onComplete()
+        }
+    }
 
     fun loadProviders(gridSpec: GridSpec) {
         viewModelScope.launch {
@@ -347,7 +365,7 @@ fun WidgetPickerOverlay(
                     }
                 }
 
-                filteredGroups.isEmpty() -> {
+                filteredGroups.isEmpty() && !state.showSmartGlanceCandidate -> {
                     Column(
                         verticalArrangement = Arrangement.spacedBy(AuroraSpacing.xs),
                         modifier = Modifier
@@ -375,6 +393,28 @@ fun WidgetPickerOverlay(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier.fillMaxSize(),
                     ) {
+                        if (state.showSmartGlanceCandidate && (state.query.isBlank() || "aurora smart glance jam clock google search".contains(state.query.trim().lowercase()))) {
+                            item(key = "hdr_aurora_system", span = { GridItemSpan(maxLineSpan) }) {
+                                Text(
+                                    text = "Aurora Launcher",
+                                    style = AuroraTypography.titleSmall,
+                                    color = palette.accent,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.padding(top = 8.dp, bottom = 2.dp),
+                                )
+                            }
+                            item(key = "candidate_smart_glance", span = { GridItemSpan(maxLineSpan) }) {
+                                SmartGlanceCandidateCard(
+                                    onRestore = {
+                                        viewModel.restoreSmartHeader {
+                                            onShowMessage(addedNotice)
+                                            onDismiss()
+                                        }
+                                    },
+                                )
+                            }
+                        }
+
                         filteredGroups.forEach { (appName, list) ->
                             item(key = "hdr_$appName", span = { GridItemSpan(maxLineSpan) }) {
                                 Text(
@@ -432,6 +472,61 @@ fun WidgetPickerOverlay(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun SmartGlanceCandidateCard(
+    onRestore: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val palette = AuroraTheme.palette
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(AuroraRadii.card))
+            .background(palette.surfaceVariant)
+            .border(0.75.dp, palette.accent.copy(alpha = 0.35f), RoundedCornerShape(AuroraRadii.card))
+            .padding(12.dp),
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = stringResource(R.string.smart_glance_widget_title),
+                style = AuroraTypography.titleSmall,
+                color = palette.onSurface,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = stringResource(R.string.smart_glance_widget_desc),
+                style = AuroraTypography.bodySmall,
+                color = palette.onSurfaceSecondary,
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Button(
+            onClick = onRestore,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = palette.accent,
+                contentColor = palette.onAccent,
+            ),
+            shape = RoundedCornerShape(AuroraRadii.input),
+            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Add,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+            )
+            Spacer(Modifier.width(4.dp))
+            Text(
+                text = stringResource(R.string.widgets_add_button),
+                style = AuroraTypography.labelMedium,
+                fontWeight = FontWeight.Bold,
+            )
         }
     }
 }

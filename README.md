@@ -3,9 +3,9 @@
   <h1>Aurora Launcher</h1>
   <p>A fast, zero-telemetry native Android home launcher built with Kotlin and Jetpack Compose.</p>
   <p>
-    <a href="https://github.com/rteitch/aurora-launcher/releases/download/v1.1.4/aurora-launcher-v1.1.4.apk"><strong>Download APK v1.1.4 (GitHub Release)</strong></a>
+    <a href="https://github.com/rteitch/aurora-launcher/releases/download/v1.1.5/aurora-launcher-v1.1.5.apk"><strong>Download APK v1.1.5 (GitHub Release)</strong></a>
     &nbsp;&middot;&nbsp;
-    <a href="releases/aurora-launcher-v1.1.4.apk"><strong>Repository APK Mirror</strong></a>
+    <a href="releases/aurora-launcher-v1.1.5.apk"><strong>Repository APK Mirror</strong></a>
     &nbsp;&middot;&nbsp;
     <a href="DESIGN.md"><strong>Design System</strong></a>
     &nbsp;&middot;&nbsp;
@@ -21,12 +21,12 @@ Aurora Launcher organizes installed Android apps into a calm spatial grid with c
 
 ## Release Package
 
-Download and install the signed `v1.1.4` (`versionCode = 5`) release build on any device running Android 8.0 (`API 26`) through Android 17 (`API 36+`). Both APKs are signed with a dedicated RSA-4096 release certificate using APK Signature Scheme `v2` and `v3` (measured):
+Download and install the signed `v1.1.5` (`versionCode = 6`) release build on any device running Android 8.0 (`API 26`) through Android 17 (`API 36+`). Both APKs are signed with a dedicated RSA-4096 release certificate using APK Signature Scheme `v2` and `v3` (measured):
 
 | Edition | Download Asset | Size and SHA-256 (measured) | Play Protect Sideload Compatibility |
 | :--- | :--- | :--- | :--- |
-| **Standard (`sideload`)** | [GitHub Release (`aurora-launcher-v1.1.4.apk`)](https://github.com/rteitch/aurora-launcher/releases/download/v1.1.4/aurora-launcher-v1.1.4.apk) / [Repo Mirror](releases/aurora-launcher-v1.1.4.apk) | `2.56 MB` (`2,684,456` bytes)<br />`0698be2883ba06c7ea74ff3c0d363c191933b60f130caf76da763105e78fcfdf` | Recommended for browser downloads. Declares `0` `BIND_NOTIFICATION_LISTENER_SERVICE` and `0` `READ_CONTACTS` entries in manifest and `classes.dex` to pass Google Play Protect Enhanced Fraud Protection. |
-| **Full (`full`)** | [GitHub Release (`aurora-launcher-v1.1.4-full.apk`)](https://github.com/rteitch/aurora-launcher/releases/download/v1.1.4/aurora-launcher-v1.1.4-full.apk) / [Repo Mirror](releases/aurora-launcher-v1.1.4-full.apk) | `2.56 MB` (`2,684,620` bytes)<br />`7a31b2fc0884d8ac152a9fb127a21be8c0634c0916409543d873c037bad36ec5` | Optional build adding opt-in Notification Count Badges and Contacts Search. Install via `adb install -r aurora-launcher-v1.1.4-full.apk` on regions enforcing Enhanced Fraud Protection. |
+| **Standard (`sideload`)** | [GitHub Release (`aurora-launcher-v1.1.5.apk`)](https://github.com/rteitch/aurora-launcher/releases/download/v1.1.5/aurora-launcher-v1.1.5.apk) / [Repo Mirror](releases/aurora-launcher-v1.1.5.apk) | `2.56 MB` (`2,689,564` bytes)<br />`d1a6c1198f5fc8753c8b2335e78a846ede821ae6c9206908df187e1461301561` | Recommended for browser downloads. Declares `0` `BIND_NOTIFICATION_LISTENER_SERVICE` and `0` `READ_CONTACTS` entries in manifest and `classes.dex` to pass Google Play Protect Enhanced Fraud Protection. |
+| **Full (`full`)** | [GitHub Release (`aurora-launcher-v1.1.5-full.apk`)](https://github.com/rteitch/aurora-launcher/releases/download/v1.1.5/aurora-launcher-v1.1.5-full.apk) / [Repo Mirror](releases/aurora-launcher-v1.1.5-full.apk) | `2.56 MB` (`2,689,728` bytes)<br />`4102b80ccf2c81b62f33eeac9a1013148afbb6bd803ce9f49aab3d402851dc9e` | Optional build adding opt-in Notification Count Badges and Contacts Search. Install via `adb install -r aurora-launcher-v1.1.5-full.apk` on regions enforcing Enhanced Fraud Protection. |
 
 On first installation from GitHub, Android Play Protect may show a standard unrecognized-developer prompt because the open-source signing key is distributed outside Google Play. Tap **More details** and choose **Install anyway** to finish installing. Devices upgrading from debug-signed `v1.1.0` must uninstall `v1.1.0` once before installing release-signed versions.
 
@@ -107,6 +107,25 @@ All screenshots below were captured from the running application on an Android 1
   </tr>
 </table>
 
+### Page Management Expansion, Target Page Picker, and Undo/Redo
+
+<table>
+  <tr>
+    <td align="center" width="33%">
+      <img src="docs/screenshots/23_page_management_add_delete.png" width="200" alt="Page Management screen with Add Page card and page cards" /><br />
+      <sub><strong>Page Management (Add & Safe Relocation)</strong><br />Add new blank pages, toggle visibility, and delete pages with safe app relocation.</sub>
+    </td>
+    <td align="center" width="33%">
+      <img src="docs/screenshots/24_target_page_picker.png" width="200" alt="Target page picker dialog from App Library" /><br />
+      <sub><strong>Target Page Picker</strong><br />Add apps from App Library to any specific screen or a new blank page.</sub>
+    </td>
+    <td align="center" width="33%">
+      <img src="docs/screenshots/25_undo_redo_topbar.png" width="200" alt="Edit Mode top action bar with Undo and Redo buttons" /><br />
+      <sub><strong>Undo & Redo Action Bar</strong><br />One-tap undo and redo for item moves, drops, tidying, and page mutations.</sub>
+    </td>
+  </tr>
+</table>
+
 ### Settings, Auto-Reflow, and Quick Actions
 
 <table>
@@ -139,6 +158,12 @@ All screenshots below were captured from the running application on an Android 1
 
 ## Core Capabilities
 
+- **Cross-Page Drag & Drop with Edge Dwell Paging.** Holding a dragged icon within 48dp of the screen edge for 400ms automatically flips to the adjacent page with haptic feedback. Dwelling at the right edge of the last page for 550ms dynamically creates and flips to a brand-new page.
+- **Smart Glance Header Deletion & Restoration.** The primary Page 1 Smart Glance Header includes a circular red minus button during Edit Mode to delete it cleanly. The header can be restored at any time as a first-party widget from the widget gallery.
+- **Workspace Undo & Redo History.** Edit Mode features dedicated Undo and Redo toolbar buttons. Every drag-drop move, tidy reflow, widget resize, and page mutation can be stepped backward or forward with atomic workspace snapshots.
+- **Page Management Expansion (Add Blank Page & Safe Relocation).** Tapping page indicator dots or the toolbar button reveals full page management with a "+ Tambah Halaman" (Add Page) card. Deleting a non-empty page safely relocates all its applications to remaining pages without data loss.
+- **Flexible Target Page Picker.** Adding apps to the home screen from App Library presents an intuitive target page selector allowing direct placement onto any existing page or immediate creation of a new blank page.
+- **Zero-Lag GPU Wallpaper Rendering.** Isolates `ProceduralWallpaperCanvas` behind `.graphicsLayer()` with cached vector `Path` objects, eliminating swipe stutter and rendering page transitions at a solid 60/120 fps.
 - **Smart Glance Header on Page 1.** Seated dynamically on row 0 of Page 1 with a live digital clock, localized date format, and Google search bar pill with voice mic intent launcher. Automatically allocates space above application icons.
 - **Full-Height 2-Column Widget Gallery.** Opens in a full 92% modal bottom sheet with rounded drag handle, category filter chips, search query input, and responsive 2-column preview cards.
 - **Universal Widget Resize & Borderless Squircles.** Eliminates neon widget border frames for authentic iOS squircle aesthetics. Adds Edit Mode circular minus badges and a dedicated resize modal supporting standard presets (`2x2`, `4x1`, `4x2`, `4x3`, `4x4`) and dimension steppers.
@@ -199,7 +224,7 @@ All figures below were measured on an Android 17 (`ps16k`, `16,384` byte page si
 
 | Metric | Target Budget | Measured Value | Status |
 | :--- | :--- | :--- | :--- |
-| Minified Release APK Size | `<= 15.0 MB` | `2.56 MB` (`2,684,456` bytes `sideload`, `2,684,620` bytes `full`) | Pass |
+| Minified Release APK Size | `<= 15.0 MB` | `2.56 MB` (`2,689,564` bytes `sideload`, `2,689,728` bytes `full`) | Pass |
 | Cold Start (`am start -W`, median of 5) | `< 700 ms` | `672 ms` | Pass |
 | Warm Resume (`KEYCODE_HOME`, median of 5) | `< 150 ms` | `98.5 ms` | Pass |
 | Idle Resident Memory (`dumpsys meminfo` Total PSS) | `< 110 MB` | `52.13 MB` | Pass |
