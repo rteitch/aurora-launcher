@@ -131,6 +131,9 @@ class FakeWorkspaceRepository(
     override suspend fun resizeWidget(itemId: ItemId, newSpanX: Int, newSpanY: Int, gridSpec: GridSpec): Boolean = true
     override suspend fun setWidgetStackActiveIndex(stackId: ItemId, activeIndex: Int) {}
     override suspend fun pinShortcut(shortcutId: String, packageName: String, userSerial: Long, label: String, gridSpec: GridSpec): Boolean = true
+    override suspend fun packWorkspace(gridSpec: GridSpec) {
+        current.update { GridOccupancyEngine.packWorkspace(it) }
+    }
     override suspend fun reflowToGrid(currentSpec: GridSpec, targetSpec: GridSpec) {
         current.update { GridOccupancyEngine.reflowWorkspace(it, targetSpec) { pos -> PageId(50L + pos) } }
     }

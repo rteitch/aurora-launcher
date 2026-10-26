@@ -63,6 +63,7 @@ interface WorkspaceRepository {
         label: String,
         gridSpec: GridSpec,
     ): Boolean
+    suspend fun packWorkspace(gridSpec: GridSpec)
     suspend fun reflowToGrid(currentSpec: GridSpec, targetSpec: GridSpec)
     suspend fun restoreLatestSnapshot(): Boolean
     suspend fun restoreSnapshotById(snapshotId: Long): Boolean

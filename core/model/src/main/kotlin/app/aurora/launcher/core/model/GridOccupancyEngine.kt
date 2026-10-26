@@ -46,6 +46,17 @@ sealed interface DropResolution {
         val targetItemId: ItemId,
     ) : DropResolution
 
+    data class SwapItems(
+        val movedItemId: ItemId,
+        val movedPageId: PageId,
+        val movedCellX: Int,
+        val movedCellY: Int,
+        val displacedItemId: ItemId,
+        val displacedPageId: PageId,
+        val displacedCellX: Int,
+        val displacedCellY: Int,
+    ) : DropResolution
+
     data class Reject(
         val reason: String,
     ) : DropResolution
@@ -147,6 +158,54 @@ object GridOccupancyEngine {
                 val (spanX, spanY) = itemSpan(dragged)
                 if (canFit(page.items, snapshot.gridSpec.columns, snapshot.gridSpec.rows, target.cellX, target.cellY, spanX, spanY, dragged.id)) {
                     DropResolution.MoveToDesktop(dragged.id, page.id, target.cellX, target.cellY)
+                } else if (spanX == 1 && spanY == 1) {
+                    val colliding = page.items.firstOrNull { other ->
+                        if (other.id == dragged.id) return@firstOrNull false
+                        val bounds = itemDesktopBounds(other) ?: return@firstOrNull false
+                        val (sx, sy) = itemSpan(other)
+                        target.cellX in bounds.first until (bounds.first + sx) &&
+                            target.cellY in bounds.second until (bounds.second + sy)
+                    }
+                    if (colliding != null && itemSpan(colliding) == (1 to 1)) {
+                        val draggedOriginal = itemDesktopBounds(dragged)
+                        val draggedPageId: PageId? = when (val p = (dragged as? WorkspaceItem.App)?.placement ?: (dragged as? WorkspaceItem.PinnedShortcut)?.placement) {
+                            is LeafPlacement.Desktop -> p.pageId
+                            else -> when (val cp = (dragged as? WorkspaceItem.Folder)?.placement) {
+                                is ContainerPlacement.Desktop -> cp.pageId
+                                else -> null
+                            }
+                        }
+                        if (draggedOriginal != null && draggedPageId != null) {
+                            DropResolution.SwapItems(
+                                movedItemId = dragged.id,
+                                movedPageId = page.id,
+                                movedCellX = target.cellX,
+                                movedCellY = target.cellY,
+                                displacedItemId = colliding.id,
+                                displacedPageId = draggedPageId,
+                                displacedCellX = draggedOriginal.first,
+                                displacedCellY = draggedOriginal.second,
+                            )
+                        } else {
+                            val freeOnThisPage = findFirstFreeSpan(page.items, snapshot.gridSpec.columns, snapshot.gridSpec.rows, 1, 1)
+                            if (freeOnThisPage != null) {
+                                DropResolution.SwapItems(
+                                    movedItemId = dragged.id,
+                                    movedPageId = page.id,
+                                    movedCellX = target.cellX,
+                                    movedCellY = target.cellY,
+                                    displacedItemId = colliding.id,
+                                    displacedPageId = page.id,
+                                    displacedCellX = freeOnThisPage.first,
+                                    displacedCellY = freeOnThisPage.second,
+                                )
+                            } else {
+                                DropResolution.Reject("Target cell range is occupied or out of bounds")
+                            }
+                        }
+                    } else {
+                        DropResolution.Reject("Target cell range is occupied or out of bounds")
+                    }
                 } else {
                     DropResolution.Reject("Target cell range is occupied or out of bounds")
                 }
@@ -330,6 +389,70 @@ object GridOccupancyEngine {
                 pages = resultPages,
                 dockItems = keptDock,
                 gridSpec = targetSpec,
+            ),
+        )
+    }
+
+    /**
+     * Compacts all desktop items across pages in row-major continuous flow (iOS style).
+     * Fills all empty gaps by shifting subsequent items forward and pruning trailing empty pages.
+     */
+    fun packWorkspace(snapshot: WorkspaceSnapshot): WorkspaceSnapshot {
+        val targetSpec = snapshot.gridSpec
+        val cols = targetSpec.columns
+        val rows = targetSpec.rows
+
+        val allDesktopItems = snapshot.pages
+            .sortedBy { it.position }
+            .flatMap { page ->
+                page.items.sortedWith(
+                    compareBy(
+                        { itemDesktopBounds(it)?.second ?: 0 },
+                        { itemDesktopBounds(it)?.first ?: 0 },
+                        { it.id.value },
+                    ),
+                )
+            }
+
+        val existingPageIds = snapshot.pages.sortedBy { it.position }.map { it.id }
+        val builtPages = mutableListOf<MutableList<WorkspaceItem>>()
+        val pageIds = mutableListOf<PageId>()
+
+        fun ensurePage(index: Int): Pair<PageId, MutableList<WorkspaceItem>> {
+            while (builtPages.size <= index) {
+                val id = existingPageIds.getOrElse(builtPages.size) { PageId((builtPages.size + 1).toLong()) }
+                pageIds.add(id)
+                builtPages.add(mutableListOf())
+            }
+            return pageIds[index] to builtPages[index]
+        }
+
+        ensurePage(0)
+
+        for (rawItem in allDesktopItems) {
+            val clamped = clampSpanToGrid(rawItem, cols, rows)
+            val (spanX, spanY) = itemSpan(clamped)
+            var placed = false
+            var pageIdx = 0
+            while (!placed && pageIdx < MAX_PAGES) {
+                val (pageId, pageItems) = ensurePage(pageIdx)
+                val free = findFirstFreeSpan(pageItems, cols, rows, spanX, spanY)
+                if (free != null) {
+                    pageItems.add(rebindDesktopPosition(clamped, pageId, free.first, free.second))
+                    placed = true
+                } else {
+                    pageIdx++
+                }
+            }
+        }
+
+        val resultPages = builtPages.mapIndexed { idx, items ->
+            WorkspacePage(id = pageIds[idx], position = idx, items = items)
+        }
+
+        return normalizeSnapshot(
+            snapshot.copy(
+                pages = resultPages,
             ),
         )
     }

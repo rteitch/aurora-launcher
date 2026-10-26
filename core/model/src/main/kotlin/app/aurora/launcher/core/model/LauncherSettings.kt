@@ -30,6 +30,8 @@ enum class WallpaperStyle {
     BOREALIS_TWILIGHT,
     IVORY_MIST,
     SLATE_HORIZON,
+    AURA_FLOW,
+    IRIDESCENT_STRATA,
     CUSTOM_IMAGE,
 }
 
@@ -75,6 +77,7 @@ data class LauncherSettings(
     val swipeDownSpotlightEnabled: Boolean = true,
     val topRightControlPanelEnabled: Boolean = true,
     val swipeUpAction: SwipeUpAction = SwipeUpAction.APP_LIBRARY,
+    val autoReflowGrid: Boolean = false,
     val includeSettingsInSearch: Boolean = false,
     val includeContactsInSearch: Boolean = false,
     val saveSearchHistory: Boolean = false,

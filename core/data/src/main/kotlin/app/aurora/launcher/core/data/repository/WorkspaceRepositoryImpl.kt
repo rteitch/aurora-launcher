@@ -471,6 +471,14 @@ class WorkspaceRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun packWorkspace(gridSpec: GridSpec) {
+        database.withTransaction {
+            val current = loadCurrentSnapshot(gridSpec)
+            val packed = GridOccupancyEngine.packWorkspace(current)
+            persistSnapshotInternal(packed)
+        }
+    }
+
     override suspend fun reflowToGrid(currentSpec: GridSpec, targetSpec: GridSpec) {
         if (currentSpec == targetSpec) return
         database.withTransaction {
@@ -992,6 +1000,49 @@ class WorkspaceRepositoryImpl @Inject constructor(
                 )
             }
 
+            is DropResolution.SwapItems -> {
+                val moved = when (draggedItem) {
+                    is WorkspaceItem.App -> draggedItem.copy(
+                        placement = LeafPlacement.Desktop(resolution.movedPageId, resolution.movedCellX, resolution.movedCellY),
+                    )
+                    is WorkspaceItem.PinnedShortcut -> draggedItem.copy(
+                        placement = LeafPlacement.Desktop(resolution.movedPageId, resolution.movedCellX, resolution.movedCellY),
+                    )
+                    is WorkspaceItem.Folder -> draggedItem.copy(
+                        placement = ContainerPlacement.Desktop(resolution.movedPageId, resolution.movedCellX, resolution.movedCellY),
+                    )
+                    else -> return snapshot
+                }
+                val allItems = snapshot.pages.flatMap { it.items } + snapshot.dockItems
+                val displacedItem = allItems.firstOrNull { it.id == resolution.displacedItemId } ?: return snapshot
+                val displacedMoved = when (displacedItem) {
+                    is WorkspaceItem.App -> displacedItem.copy(
+                        placement = LeafPlacement.Desktop(resolution.displacedPageId, resolution.displacedCellX, resolution.displacedCellY),
+                    )
+                    is WorkspaceItem.PinnedShortcut -> displacedItem.copy(
+                        placement = LeafPlacement.Desktop(resolution.displacedPageId, resolution.displacedCellX, resolution.displacedCellY),
+                    )
+                    is WorkspaceItem.Folder -> displacedItem.copy(
+                        placement = ContainerPlacement.Desktop(resolution.displacedPageId, resolution.displacedCellX, resolution.displacedCellY),
+                    )
+                    else -> return snapshot
+                }
+                val cleaned = snapshot.copy(
+                    pages = snapshot.pages.map { p ->
+                        p.copy(items = p.items.filterNot { it.id == draggedItem.id || it.id == displacedItem.id })
+                    },
+                    dockItems = snapshot.dockItems.filterNot { it.id == draggedItem.id || it.id == displacedItem.id },
+                )
+                cleaned.copy(
+                    pages = cleaned.pages.map { p ->
+                        val toAdd = mutableListOf<WorkspaceItem>()
+                        if (p.id == resolution.movedPageId) toAdd.add(moved)
+                        if (p.id == resolution.displacedPageId) toAdd.add(displacedMoved)
+                        if (toAdd.isNotEmpty()) p.copy(items = p.items + toAdd) else p
+                    },
+                )
+            }
+
             is DropResolution.Reject -> snapshot
         }
     }
@@ -1035,6 +1086,7 @@ class WorkspaceRepositoryImpl @Inject constructor(
         is DropResolution.CreateFolder -> resolution.draggedAppId
         is DropResolution.AddToFolder -> resolution.draggedAppId
         is DropResolution.MergeIntoWidgetStack -> resolution.draggedWidgetId
+        is DropResolution.SwapItems -> resolution.movedItemId
         is DropResolution.Reject -> ItemId(-1L)
     }
 

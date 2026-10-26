@@ -38,6 +38,7 @@
     <string name="home_app_library_indicator_cd">Halaman App Library</string>
     <string name="edit_bar_widgets">Widget</string>
     <string name="edit_bar_wallpaper">Wallpaper</string>
+    <string name="edit_bar_tidy">Rapikan</string>
     <string name="edit_bar_settings">Pengaturan</string>
     <string name="edit_bar_done">Selesai Edit</string>
     <string name="home_suspended_app_notice">%1$s sedang dijeda atau dinonaktifkan di pengaturan sistem.</string>
@@ -183,12 +184,16 @@
     <string name="settings_wallpaper_borealis">Senja Borealis</string>
     <string name="settings_wallpaper_ivory">Kabut Gading</string>
     <string name="settings_wallpaper_slate">Ufuk Sabak</string>
+    <string name="settings_wallpaper_aura_flow">Aura Flow</string>
+    <string name="settings_wallpaper_iridescent_strata">Iridescent Strata</string>
     <string name="settings_wallpaper_pick_photo">Pilih Foto Sendiri</string>
 
     <string name="settings_group_grid">Grid &amp; Dock</string>
     <string name="settings_grid_preset_label">Ukuran Grid Layar Utama</string>
     <string name="settings_grid_reflow_done">Grid diubah ke %1$s. Tata letak sebelumnya disimpan ke snapshot.</string>
     <string name="settings_grid_adaptive_tablet">Grid adaptif 6x5 pada tablet dan layar lebar</string>
+    <string name="settings_autoreflow_title">Rapatkan Kisi Otomatis</string>
+    <string name="settings_autoreflow_subtitle">Otomatis isi ruang kosong saat aplikasi dipindah atau dihapus</string>
     <string name="settings_icon_size_label">Ukuran Ikon (%1$d dp)</string>
     <string name="settings_show_labels">Tampilkan Label Aplikasi</string>
     <string name="settings_dock_slots_label">Kapasitas Dock (%1$d slot)</string>

@@ -628,6 +628,8 @@ private fun SettingsMainContent(
                                 WallpaperStyle.BOREALIS_TWILIGHT to R.string.settings_wallpaper_borealis,
                                 WallpaperStyle.IVORY_MIST to R.string.settings_wallpaper_ivory,
                                 WallpaperStyle.SLATE_HORIZON to R.string.settings_wallpaper_slate,
+                                WallpaperStyle.AURA_FLOW to R.string.settings_wallpaper_aura_flow,
+                                WallpaperStyle.IRIDESCENT_STRATA to R.string.settings_wallpaper_iridescent_strata,
                             ).forEach { (ws, resId) ->
                                 SettingsPill(
                                     label = stringResource(resId),
@@ -679,6 +681,12 @@ private fun SettingsMainContent(
                             label = stringResource(R.string.settings_grid_adaptive_tablet),
                             checked = state.settings.adaptiveTabletGrid,
                             onCheckedChange = { v -> viewModel.updateSettings { it.copy(adaptiveTabletGrid = v) } },
+                        )
+
+                        SettingsSwitchRow(
+                            label = stringResource(R.string.settings_autoreflow_title),
+                            checked = state.settings.autoReflowGrid,
+                            onCheckedChange = { v -> viewModel.updateSettings { it.copy(autoReflowGrid = v) } },
                         )
 
                         Text(

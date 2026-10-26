@@ -38,6 +38,7 @@
     <string name="home_app_library_indicator_cd">App Library page</string>
     <string name="edit_bar_widgets">Widgets</string>
     <string name="edit_bar_wallpaper">Wallpaper</string>
+    <string name="edit_bar_tidy">Tidy</string>
     <string name="edit_bar_settings">Launcher Settings</string>
     <string name="edit_bar_done">Finish Editing</string>
     <string name="home_suspended_app_notice">%1$s is paused or disabled in system settings.</string>
@@ -183,12 +184,16 @@
     <string name="settings_wallpaper_borealis">Borealis Twilight</string>
     <string name="settings_wallpaper_ivory">Ivory Mist</string>
     <string name="settings_wallpaper_slate">Slate Horizon</string>
+    <string name="settings_wallpaper_aura_flow">Aura Flow</string>
+    <string name="settings_wallpaper_iridescent_strata">Iridescent Strata</string>
     <string name="settings_wallpaper_pick_photo">Choose Custom Photo</string>
 
     <string name="settings_group_grid">Grid &amp; Dock</string>
     <string name="settings_grid_preset_label">Desktop Grid Size</string>
     <string name="settings_grid_reflow_done">Grid updated to %1$s. Previous layout saved to snapshots.</string>
     <string name="settings_grid_adaptive_tablet">Adaptive 6x5 grid on tablets and wide screens</string>
+    <string name="settings_autoreflow_title">Auto-Fill Empty Spaces</string>
+    <string name="settings_autoreflow_subtitle">Automatically pack app grid when icons are moved or removed</string>
     <string name="settings_icon_size_label">Icon Size (%1$d dp)</string>
     <string name="settings_show_labels">Show App Labels on Home</string>
     <string name="settings_dock_slots_label">Dock Capacity (%1$d slots)</string>

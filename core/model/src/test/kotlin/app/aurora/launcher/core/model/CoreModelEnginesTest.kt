@@ -221,4 +221,89 @@ class CoreModelEnginesTest {
         val diacriticResult = SpotlightSearchEngine.search("cafe", listOf(gm, secret, cafe))
         assertEquals(listOf(cafe), diacriticResult.matchingApps)
     }
+
+    @Test
+    fun `resolveDrop performs swap displacement when dragging 1x1 app onto occupied 1x1 cell`() {
+        val app1 = WorkspaceItem.App(
+            id = ItemId(1L),
+            placement = LeafPlacement.Desktop(pageOne, 0, 0),
+            component = ComponentKey("pkg.a", "Main", 0L),
+        )
+        val app2 = WorkspaceItem.App(
+            id = ItemId(2L),
+            placement = LeafPlacement.Desktop(pageOne, 1, 0),
+            component = ComponentKey("pkg.b", "Main", 0L),
+        )
+        val snapshot = WorkspaceSnapshot(
+            pages = listOf(WorkspacePage(pageOne, 0, listOf(app1, app2))),
+            dockItems = emptyList(),
+            gridSpec = spec4x6,
+        )
+
+        // Drag app1 onto app2's cell (1, 0)
+        val resolution = GridOccupancyEngine.resolveDrop(
+            snapshot = snapshot,
+            draggedItemId = ItemId(1L),
+            target = DropTarget.DesktopCell(pageOne, 1, 0),
+        )
+
+        assertEquals(
+            DropResolution.SwapItems(
+                movedItemId = ItemId(1L),
+                movedPageId = pageOne,
+                movedCellX = 1,
+                movedCellY = 0,
+                displacedItemId = ItemId(2L),
+                displacedPageId = pageOne,
+                displacedCellX = 0,
+                displacedCellY = 0,
+            ),
+            resolution,
+        )
+    }
+
+    @Test
+    fun `packWorkspace compacts gaps across pages in row-major continuous flow`() {
+        val app1 = WorkspaceItem.App(
+            id = ItemId(1L),
+            placement = LeafPlacement.Desktop(pageOne, 0, 0),
+            component = ComponentKey("pkg.a", "Main", 0L),
+        )
+        // Leave gaps at (1,0) and (2,0)
+        val app2 = WorkspaceItem.App(
+            id = ItemId(2L),
+            placement = LeafPlacement.Desktop(pageOne, 3, 0),
+            component = ComponentKey("pkg.b", "Main", 0L),
+        )
+        val pageTwo = PageId(2L)
+        val app3OnPageTwo = WorkspaceItem.App(
+            id = ItemId(3L),
+            placement = LeafPlacement.Desktop(pageTwo, 0, 0),
+            component = ComponentKey("pkg.c", "Main", 0L),
+        )
+
+        val snapshot = WorkspaceSnapshot(
+            pages = listOf(
+                WorkspacePage(pageOne, 0, listOf(app1, app2)),
+                WorkspacePage(pageTwo, 1, listOf(app3OnPageTwo)),
+            ),
+            dockItems = emptyList(),
+            gridSpec = spec4x6,
+        )
+
+        val packed = GridOccupancyEngine.packWorkspace(snapshot)
+
+        // Page 1 now has all 3 apps at (0,0), (1,0), (2,0), and page 2 is pruned
+        assertEquals(1, packed.pages.size)
+        val pageItems = packed.pages[0].items
+        assertEquals(3, pageItems.size)
+        val positions = pageItems.map {
+            val b = GridOccupancyEngine.itemDesktopBounds(it)!!
+            it.id to (b.first to b.second)
+        }.toMap()
+
+        assertEquals(0 to 0, positions[ItemId(1L)])
+        assertEquals(1 to 0, positions[ItemId(2L)])
+        assertEquals(2 to 0, positions[ItemId(3L)])
+    }
 }

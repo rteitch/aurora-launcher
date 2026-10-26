@@ -149,7 +149,9 @@ private fun LauncherShell(
             state.settings.wallpaperStyle == WallpaperStyle.IVORY_MIST &&
                 state.settings.customWallpaperPath == null -> true
             state.settings.wallpaperStyle == WallpaperStyle.BOREALIS_TWILIGHT ||
-                state.settings.wallpaperStyle == WallpaperStyle.SLATE_HORIZON -> false
+                state.settings.wallpaperStyle == WallpaperStyle.SLATE_HORIZON ||
+                state.settings.wallpaperStyle == WallpaperStyle.AURA_FLOW ||
+                state.settings.wallpaperStyle == WallpaperStyle.IRIDESCENT_STRATA -> false
             else -> !palette.isDark
         }
         if (!view.isInEditMode) {

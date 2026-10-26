@@ -35,6 +35,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.PushPin
@@ -238,6 +239,9 @@ fun HomeScreen(
                 isEditMode,
                 state.settings.swipeDownSpotlightEnabled,
                 state.settings.topRightControlPanelEnabled,
+                state.settings.swipeUpAction,
+                showAppLibrary,
+                workspacePages.size,
             ) {
                 if (onAppLibraryPage || isEditMode) return@pointerInput
                 var startX = 0f
@@ -256,13 +260,24 @@ fun HomeScreen(
                         // Ignore top 40dp edge so Android notification shade remains untouched (Appendix A).
                         if (startY < 40.dp.toPx()) return@detectVerticalDragGestures
                         accumDy += dragAmount
-                        if (accumDy > 68.dp.toPx()) {
+                        if (accumDy > 32.dp.toPx()) {
                             triggered = true
                             val isTopRightZone = startX > size.width * 0.68f && startY < size.height * 0.36f
                             if (isTopRightZone && state.settings.topRightControlPanelEnabled) {
                                 onOpenControlPanel()
                             } else if (state.settings.swipeDownSpotlightEnabled) {
                                 onOpenSpotlight()
+                            }
+                        } else if (accumDy < -32.dp.toPx()) {
+                            triggered = true
+                            when (state.settings.swipeUpAction) {
+                                SwipeUpAction.APP_LIBRARY -> {
+                                    if (showAppLibrary) {
+                                        scope.launch { pagerState.animateScrollToPage(workspacePages.size) }
+                                    }
+                                }
+                                SwipeUpAction.SPOTLIGHT -> onOpenSpotlight()
+                                SwipeUpAction.NONE -> Unit
                             }
                         }
                     },
@@ -316,6 +331,7 @@ fun HomeScreen(
                         EditModeTopBar(
                             onAddWidget = { onOpenWidgetPicker(page?.id) },
                             onCycleWallpaper = viewModel::cycleWallpaperStyle,
+                            onTidyUp = viewModel::packWorkspace,
                             onOpenSettings = {
                                 viewModel.exitEditMode()
                                 onOpenSettings()
@@ -446,9 +462,12 @@ fun HomeScreen(
                                                         val tx = (relX / cellPxW).toInt().coerceIn(0, cols - 1)
                                                         val ty = (relY / cellPxH).toInt().coerceIn(0, rows - 1)
                                                         val curPage = workspacePages.getOrNull(pagerState.currentPage)
-                                                        val occ = curPage?.let {
-                                                            GridOccupancyEngine.buildOccupancyGrid(it.items, cols, rows, item.id)[ty][tx]
-                                                        }
+                                                        val occ = curPage?.items?.firstOrNull { other ->
+                                                            if (other.id == item.id) return@firstOrNull false
+                                                            val bounds = GridOccupancyEngine.itemDesktopBounds(other) ?: return@firstOrNull false
+                                                            val (sx, sy) = GridOccupancyEngine.itemSpan(other)
+                                                            tx in bounds.first until (bounds.first + sx) && ty in bounds.second until (bounds.second + sy)
+                                                        }?.id
                                                         val centerDistX = abs((relX % cellPxW) - cellPxW / 2f) / cellPxW
                                                         val centerDistY = abs((relY % cellPxH) - cellPxH / 2f) / cellPxH
                                                         hoveredItemId = if (occ != null && centerDistX < 0.32f && centerDistY < 0.32f) occ else null
@@ -688,7 +707,7 @@ fun HomeScreen(
                             onDragStart = { dySum = 0f },
                             onVerticalDrag = { _, dy ->
                                 dySum += dy
-                                if (dySum < -56.dp.toPx()) {
+                                if (dySum < -32.dp.toPx()) {
                                     dySum = 0f
                                     when (state.settings.swipeUpAction) {
                                         SwipeUpAction.APP_LIBRARY -> {
@@ -762,9 +781,12 @@ fun HomeScreen(
                                                     val tx = (relX / cellPxW).toInt().coerceIn(0, gridCols - 1)
                                                     val ty = (relY / cellPxH).toInt().coerceIn(0, gridRows - 1)
                                                     val curPage = workspacePages.getOrNull(pagerState.currentPage)
-                                                    val occ = curPage?.let {
-                                                        GridOccupancyEngine.buildOccupancyGrid(it.items, gridCols, gridRows, dockItem.id)[ty][tx]
-                                                    }
+                                                    val occ = curPage?.items?.firstOrNull { other ->
+                                                        if (other.id == dockItem.id) return@firstOrNull false
+                                                        val bounds = GridOccupancyEngine.itemDesktopBounds(other) ?: return@firstOrNull false
+                                                        val (sx, sy) = GridOccupancyEngine.itemSpan(other)
+                                                        tx in bounds.first until (bounds.first + sx) && ty in bounds.second until (bounds.second + sy)
+                                                    }?.id
                                                     val centerDistX = kotlin.math.abs((relX % cellPxW) - cellPxW / 2f) / cellPxW
                                                     val centerDistY = kotlin.math.abs((relY % cellPxH) - cellPxH / 2f) / cellPxH
                                                     hoveredItemId = if (occ != null && centerDistX < 0.32f && centerDistY < 0.32f) occ else null
@@ -1208,6 +1230,7 @@ private fun PreviewModeBanner(
 private fun EditModeTopBar(
     onAddWidget: () -> Unit,
     onCycleWallpaper: () -> Unit,
+    onTidyUp: () -> Unit,
     onOpenSettings: () -> Unit,
     onFinishEdit: () -> Unit,
     modifier: Modifier = Modifier,
@@ -1262,6 +1285,17 @@ private fun EditModeTopBar(
                     imageVector = Icons.Outlined.Wallpaper,
                     contentDescription = stringResource(R.string.edit_bar_wallpaper),
                     tint = palette.onSurface,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+            IconButton(
+                onClick = onTidyUp,
+                modifier = Modifier.size(38.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.AutoAwesome,
+                    contentDescription = stringResource(R.string.edit_bar_tidy),
+                    tint = palette.accent,
                     modifier = Modifier.size(20.dp),
                 )
             }

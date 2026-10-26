@@ -165,6 +165,9 @@ class HomeViewModel @Inject constructor(
 
         viewModelScope.launch {
             workspaceRepository.applyDrop(snapshot, resolution)
+            if (uiState.value.settings.autoReflowGrid) {
+                workspaceRepository.packWorkspace(snapshot.gridSpec)
+            }
         }
     }
 
@@ -247,6 +250,9 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             val removedWidgetIds = workspaceRepository.removeItemFromHome(itemId)
             removedWidgetIds.forEach { widgetHostManager.deleteWidgetId(it.value) }
+            if (uiState.value.settings.autoReflowGrid) {
+                workspaceRepository.packWorkspace(uiState.value.workspace.gridSpec)
+            }
         }
     }
 
@@ -313,10 +319,21 @@ class HomeViewModel @Inject constructor(
                         app.aurora.launcher.core.model.WallpaperStyle.IVORY_MIST
                     app.aurora.launcher.core.model.WallpaperStyle.IVORY_MIST ->
                         app.aurora.launcher.core.model.WallpaperStyle.SLATE_HORIZON
+                    app.aurora.launcher.core.model.WallpaperStyle.SLATE_HORIZON ->
+                        app.aurora.launcher.core.model.WallpaperStyle.AURA_FLOW
+                    app.aurora.launcher.core.model.WallpaperStyle.AURA_FLOW ->
+                        app.aurora.launcher.core.model.WallpaperStyle.IRIDESCENT_STRATA
                     else -> app.aurora.launcher.core.model.WallpaperStyle.BOREALIS_TWILIGHT
                 }
                 cur.copy(wallpaperStyle = next)
             }
+        }
+    }
+
+    fun packWorkspace() {
+        val spec = uiState.value.workspace.gridSpec
+        viewModelScope.launch {
+            workspaceRepository.packWorkspace(spec)
         }
     }
 
