@@ -3,9 +3,9 @@
   <h1>Aurora Launcher</h1>
   <p>A fast, zero-telemetry native Android home launcher built with Kotlin and Jetpack Compose.</p>
   <p>
-    <a href="https://github.com/rteitch/aurora-launcher/releases/download/v1.1.0/aurora-launcher-v1.1.0.apk"><strong>Download APK v1.1.0 (GitHub Release)</strong></a>
+    <a href="https://github.com/rteitch/aurora-launcher/releases/download/v1.1.1/aurora-launcher-v1.1.1.apk"><strong>Download APK v1.1.1 (GitHub Release)</strong></a>
     &nbsp;&middot;&nbsp;
-    <a href="releases/aurora-launcher-v1.1.0.apk"><strong>Repository APK Mirror</strong></a>
+    <a href="releases/aurora-launcher-v1.1.1.apk"><strong>Repository APK Mirror</strong></a>
     &nbsp;&middot;&nbsp;
     <a href="DESIGN.md"><strong>Design System</strong></a>
     &nbsp;&middot;&nbsp;
@@ -21,12 +21,14 @@ Aurora Launcher organizes installed Android apps into a calm spatial grid with c
 
 ## Release Package
 
-Download and install the signed release build on any device running Android 8.0 (`API 26`) through Android 17 (`API 36+`):
+Download and install the signed `v1.1.1` (`versionCode = 2`) release build on any device running Android 8.0 (`API 26`) through Android 17 (`API 36+`). Both APKs are signed with a dedicated RSA-4096 release certificate using APK Signature Scheme `v2` and `v3` (measured):
 
-- **Version.** `1.1.0` (`versionCode = 1`).
-- **GitHub Release Asset.** [`aurora-launcher-v1.1.0.apk`](https://github.com/rteitch/aurora-launcher/releases/download/v1.1.0/aurora-launcher-v1.1.0.apk).
-- **Git Tree Mirror.** [`releases/aurora-launcher-v1.1.0.apk`](releases/aurora-launcher-v1.1.0.apk).
-- **Package Integrity.** `2.51 MB` (`2,635,632` bytes), SHA-256 `95667c8a2628b48dacde04d10633f478d2696c11c1193166ddbb6fd47450fbb7` (measured).
+| Edition | Download Asset | Size and SHA-256 (measured) | Play Protect Sideload Compatibility |
+| :--- | :--- | :--- | :--- |
+| **Standard (`sideload`)** | [GitHub Release (`aurora-launcher-v1.1.1.apk`)](https://github.com/rteitch/aurora-launcher/releases/download/v1.1.1/aurora-launcher-v1.1.1.apk) / [Repo Mirror](releases/aurora-launcher-v1.1.1.apk) | `2.52 MB` (`2,639,556` bytes)<br />`6f57783d6e96bb1165fc783581d9aa8ca71c8c0cabff85d6f6ce29a5fbe3c235` | Recommended for browser downloads. Declares `0` `BIND_NOTIFICATION_LISTENER_SERVICE` and `0` `READ_CONTACTS` entries in manifest and `classes.dex` to pass Google Play Protect Enhanced Fraud Protection. |
+| **Full (`full`)** | [GitHub Release (`aurora-launcher-v1.1.1-full.apk`)](https://github.com/rteitch/aurora-launcher/releases/download/v1.1.1/aurora-launcher-v1.1.1-full.apk) | `2.52 MB` (`2,639,720` bytes)<br />`4c016d8dd6c62a6fbee544f2a4ae8b1817894bbf650c45ec88e0b3453a1d3b3e` | Optional build adding opt-in Notification Count Badges and Contacts Search. Install via `adb install -r aurora-launcher-v1.1.1-full.apk` on regions enforcing Enhanced Fraud Protection. |
+
+On first installation from GitHub, Android Play Protect may show a standard unrecognized-developer prompt because the open-source signing key is distributed outside Google Play. Tap **More details** and choose **Install anyway** to finish installing. Devices upgrading from debug-signed `v1.1.0` must uninstall `v1.1.0` once before installing release-signed `v1.1.1`.
 
 ## Application Screenshots
 
@@ -125,11 +127,12 @@ All screenshots below were captured from the running application on an Android 1
 
 ## Privacy and Permissions
 
-Aurora Launcher enforces strict permission boundaries in [`app/src/main/AndroidManifest.xml`](app/src/main/AndroidManifest.xml):
+Aurora Launcher enforces strict permission boundaries across [`app/src/main/AndroidManifest.xml`](app/src/main/AndroidManifest.xml) and [`app/src/full/AndroidManifest.xml`](app/src/full/AndroidManifest.xml):
 
-- **No Network Access.** The application declares zero `android.permission.INTERNET` and zero `ACCESS_NETWORK_STATE` permissions (measured).
+- **No Network Access.** Both editions declare zero `android.permission.INTERNET` and zero `ACCESS_NETWORK_STATE` permissions (measured).
 - **No Broad Package Visibility Permission.** Launcher catalog discovery uses the standard `<queries>` `ACTION_MAIN` + `CATEGORY_LAUNCHER` intent filter and `LauncherApps` APIs instead of `QUERY_ALL_PACKAGES` (measured).
-- **Opt-In System Listeners.** Notification count dots (`NotificationListenerService`) and double-tap lock (`AccessibilityService`) stay disabled until explicitly enabled by the user in system settings, and never read notification titles or message bodies.
+- **Play-Protect-Safe Default Manifest.** The default `sideload` edition declares zero `BIND_NOTIFICATION_LISTENER_SERVICE`, zero `BIND_ACCESSIBILITY_SERVICE`, zero SMS permissions, and zero `READ_CONTACTS` permissions, and R8 strips `AuroraNotificationListenerService` from `classes.dex` (measured via [`scripts/verify-play-protect-compliance.ps1`](scripts/verify-play-protect-compliance.ps1)).
+- **Opt-In Full Edition Listeners.** In the optional `full` edition, notification count badges (`NotificationListenerService`) and contact search (`READ_CONTACTS`) stay disabled until explicitly granted by the user in Android settings, and never read or persist notification message text.
 - **Sanitized Cloud Backup.** Android Auto Backup includes only a sanitized workspace coordinate file and excludes SQLite usage history, search history, and lock metadata (measured).
 
 ## Multi-Module Architecture
@@ -165,7 +168,7 @@ All figures below were measured on an Android 17 (`ps16k`, `16,384` byte page si
 
 | Metric | Target Budget | Measured Value | Status |
 | :--- | :--- | :--- | :--- |
-| Minified Release APK Size | `<= 15.0 MB` | `2.51 MB` (`2,635,632` bytes) | Pass |
+| Minified Release APK Size | `<= 15.0 MB` | `2.52 MB` (`2,639,556` bytes `sideload`, `2,639,720` bytes `full`) | Pass |
 | Cold Start (`am start -W`, median of 5) | `< 700 ms` | `672 ms` | Pass |
 | Warm Resume (`KEYCODE_HOME`, median of 5) | `< 150 ms` | `98.5 ms` | Pass |
 | Idle Resident Memory (`dumpsys meminfo` Total PSS) | `< 110 MB` | `52.13 MB` | Pass |
@@ -179,13 +182,13 @@ Prerequisites:
 - JDK 21 (for example Android Studio bundled JBR).
 - Android SDK Platform `37` (`compileSdk = 37`, `targetSdk = 36`, `minSdk = 26`).
 
-Run unit tests, Android Lint, and build the minified release APK from the repository root:
+Run unit tests, Android Lint, and build both minified release editions from the repository root:
 
 ```bash
-./gradlew testDebugUnitTest :core:model:test lintDebug assembleRelease
+./gradlew testSideloadDebugUnitTest testFullDebugUnitTest :core:model:test lintSideloadDebug lintFullDebug assembleSideloadRelease assembleFullRelease
 ```
 
-The signed release package is written to `app/build/outputs/apk/release/app-release.apk`.
+The release packages are written to `app/build/outputs/apk/sideload/release/app-sideload-release.apk` and `app/build/outputs/apk/full/release/app-full-release.apk`. Verify binary manifest, DEX, and signature compliance with [`scripts/verify-play-protect-compliance.ps1`](scripts/verify-play-protect-compliance.ps1).
 
 ## License
 

@@ -322,10 +322,17 @@ private fun LauncherShell(
                 onShowMessage = viewModel::showMessage,
             )
 
+            val installedVersionName = remember(activity) {
+                runCatching {
+                    @Suppress("DEPRECATION")
+                    activity.packageManager.getPackageInfo(activity.packageName, 0).versionName
+                }.getOrNull() ?: "1.1.1"
+            }
+
             SettingsOverlay(
                 visible = state.overlay is ShellOverlay.Settings,
                 isTabletViewport = isTabletViewport,
-                versionName = "1.1.0",
+                versionName = installedVersionName,
                 onClose = viewModel::closeOverlay,
             )
 

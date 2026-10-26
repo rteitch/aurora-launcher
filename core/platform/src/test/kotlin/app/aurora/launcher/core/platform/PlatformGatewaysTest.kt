@@ -63,4 +63,52 @@ class PlatformGatewaysTest {
         assertEquals(strongAndDevice, BiometricAuthGateway.resolveAllowedAuthenticators(29))
         assertEquals(weakAndDevice, BiometricAuthGateway.resolveAllowedAuthenticators(30))
     }
+
+    @Test
+    fun `NotificationBadgeGateway resolves UNSUPPORTED_IN_BUILD when manifest omits listener service`() {
+        val capability = NotificationBadgeGateway.resolveCapability(
+            packageName = "app.aurora.launcher",
+            declaredServiceNames = emptyList(),
+            enabledListenersColonSeparated = "app.aurora.launcher/app.aurora.launcher.core.platform.AuroraNotificationListenerService",
+        )
+        assertEquals(BadgeServiceCapability.UNSUPPORTED_IN_BUILD, capability)
+    }
+
+    @Test
+    fun `NotificationBadgeGateway resolves PERMISSION_REQUIRED and GRANTED for full and short component names`() {
+        val declared = listOf("app.aurora.launcher.core.platform.AuroraNotificationListenerService")
+
+        assertEquals(
+            BadgeServiceCapability.PERMISSION_REQUIRED,
+            NotificationBadgeGateway.resolveCapability(
+                packageName = "app.aurora.launcher",
+                declaredServiceNames = declared,
+                enabledListenersColonSeparated = "com.other.app/.OtherListener",
+            ),
+        )
+
+        assertEquals(
+            BadgeServiceCapability.GRANTED,
+            NotificationBadgeGateway.resolveCapability(
+                packageName = "app.aurora.launcher",
+                declaredServiceNames = declared,
+                enabledListenersColonSeparated = "com.other.app/.OtherListener:app.aurora.launcher/.core.platform.AuroraNotificationListenerService",
+            ),
+        )
+
+        assertEquals(
+            BadgeServiceCapability.GRANTED,
+            NotificationBadgeGateway.resolveCapability(
+                packageName = "app.aurora.launcher",
+                declaredServiceNames = declared,
+                enabledListenersColonSeparated = "app.aurora.launcher/app.aurora.launcher.core.platform.AuroraNotificationListenerService",
+            ),
+        )
+    }
+
+    @Test
+    fun `ContactsAndSettingsSearchGateway detects whether READ_CONTACTS is declared in package manifest`() {
+        assertFalse(ContactsAndSettingsSearchGateway.isContactsSupported(setOf("android.permission.VIBRATE")))
+        assertTrue(ContactsAndSettingsSearchGateway.isContactsSupported(setOf("android.permission.READ_CONTACTS")))
+    }
 }

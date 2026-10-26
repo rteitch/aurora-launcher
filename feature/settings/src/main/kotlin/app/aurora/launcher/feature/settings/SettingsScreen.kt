@@ -60,7 +60,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.compose.NavHost
@@ -91,7 +94,9 @@ import app.aurora.launcher.core.model.LauncherSettings
 import app.aurora.launcher.core.model.ThemeMode
 import app.aurora.launcher.core.model.WallpaperStyle
 import app.aurora.launcher.core.platform.AppWidgetHostManager
+import app.aurora.launcher.core.platform.BadgeServiceCapability
 import app.aurora.launcher.core.platform.BiometricAuthGateway
+import app.aurora.launcher.core.platform.ContactsAndSettingsSearchGateway
 import app.aurora.launcher.core.platform.IconCacheAndLoader
 import app.aurora.launcher.core.platform.IconPackCandidate
 import app.aurora.launcher.core.platform.IconPackGateway
@@ -131,7 +136,8 @@ data class SettingsUiState(
     val snapshots: List<SnapshotSummary> = emptyList(),
     val iconPacks: List<IconPackCandidate> = emptyList(),
     val activeGlassTier: GlassTier = GlassTier.TIER_C_SOLID,
-    val isBadgeAccessGranted: Boolean = false,
+    val badgeCapability: BadgeServiceCapability = BadgeServiceCapability.UNSUPPORTED_IN_BUILD,
+    val isContactsSearchSupported: Boolean = false,
     val isBiometricAvailable: Boolean = false,
     val statusBanner: String? = null,
     val canUndoLastGridChange: Boolean = false,
@@ -149,21 +155,34 @@ class SettingsViewModel @Inject constructor(
     private val iconPackGateway: IconPackGateway,
     private val iconLoader: IconCacheAndLoader,
     private val badgeGateway: NotificationBadgeGateway,
+    private val contactsAndSettingsGateway: ContactsAndSettingsSearchGateway,
     private val biometricGateway: BiometricAuthGateway,
     private val widgetHostManager: AppWidgetHostManager,
     private val dispatchers: AuroraDispatchers,
 ) : ViewModel() {
 
-    private val iconPacksFlow = MutableStateFlow<List<IconPackCandidate>>(emptyList())
+    private data class ExternalPlatformCapabilities(
+        val iconPacks: List<IconPackCandidate>,
+        val badgeCapability: BadgeServiceCapability,
+        val isContactsSupported: Boolean,
+    )
+
+    private val externalCapabilitiesFlow = MutableStateFlow(
+        ExternalPlatformCapabilities(
+            iconPacks = emptyList(),
+            badgeCapability = badgeGateway.readCapability(),
+            isContactsSupported = contactsAndSettingsGateway.isContactsPermissionDeclaredInPackage(),
+        ),
+    )
     private val bannerFlow = MutableStateFlow<Pair<String?, Boolean>>(null to false)
 
     val uiState: StateFlow<SettingsUiState> = combine(
         settingsRepository.settings,
         appCatalogRepository.allApps,
         workspaceRepository.snapshots,
-        iconPacksFlow,
+        externalCapabilitiesFlow,
         bannerFlow,
-    ) { settings, apps, snapshots, packs, (banner, canUndo) ->
+    ) { settings, apps, snapshots, capabilities, (banner, canUndo) ->
         val signals = wallpaperGateway.readEnvironmentSignals()
         val resolvedTier = settings.resolveGlassTier(
             sdkInt = signals.sdkInt,
@@ -175,9 +194,10 @@ class SettingsViewModel @Inject constructor(
             settings = settings,
             hiddenApps = apps.filter { it.isHidden },
             snapshots = snapshots,
-            iconPacks = packs,
+            iconPacks = capabilities.iconPacks,
             activeGlassTier = resolvedTier,
-            isBadgeAccessGranted = badgeGateway.isNotificationAccessGranted(),
+            badgeCapability = capabilities.badgeCapability,
+            isContactsSearchSupported = capabilities.isContactsSupported,
             isBiometricAvailable = biometricGateway.isAuthenticationAvailable(),
             statusBanner = banner,
             canUndoLastGridChange = canUndo,
@@ -190,7 +210,12 @@ class SettingsViewModel @Inject constructor(
 
     fun refreshExternalState() {
         viewModelScope.launch {
-            iconPacksFlow.value = iconPackGateway.discoverIconPacks()
+            val packs = iconPackGateway.discoverIconPacks()
+            externalCapabilitiesFlow.value = ExternalPlatformCapabilities(
+                iconPacks = packs,
+                badgeCapability = badgeGateway.readCapability(),
+                isContactsSupported = contactsAndSettingsGateway.isContactsPermissionDeclaredInPackage(),
+            )
         }
     }
 
@@ -350,9 +375,16 @@ fun SettingsOverlay(
 
     val navController = rememberNavController()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val lifecycleOwner = LocalLifecycleOwner.current
 
-    LaunchedEffect(Unit) {
-        viewModel.refreshExternalState()
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.refreshExternalState()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     NavHost(
@@ -764,41 +796,44 @@ private fun SettingsMainContent(
                             checked = state.settings.includeSettingsInSearch,
                             onCheckedChange = { v -> viewModel.updateSettings { it.copy(includeSettingsInSearch = v) } },
                         )
-                        SettingsSwitchRow(
-                            label = stringResource(R.string.settings_search_contacts),
-                            checked = state.settings.includeContactsInSearch,
-                            onCheckedChange = { v -> viewModel.updateSettings { it.copy(includeContactsInSearch = v) } },
-                        )
+                        if (state.isContactsSearchSupported) {
+                            SettingsSwitchRow(
+                                label = stringResource(R.string.settings_search_contacts),
+                                checked = state.settings.includeContactsInSearch,
+                                onCheckedChange = { v -> viewModel.updateSettings { it.copy(includeContactsInSearch = v) } },
+                            )
+                        }
                     }
                 }
 
-                // 5. Privacy & App Security
                 item(key = "grp_privacy") {
                     SettingsGroupCard(title = stringResource(R.string.settings_group_privacy)) {
-                        SettingsSwitchRow(
-                            label = stringResource(R.string.settings_badges_toggle),
-                            checked = state.settings.notificationBadgesEnabled,
-                            onCheckedChange = { v ->
-                                viewModel.updateSettings { it.copy(notificationBadgesEnabled = v) }
-                            },
-                        )
-                        Text(
-                            text = stringResource(R.string.settings_badges_subtitle),
-                            style = AuroraTypography.bodyMedium,
-                            color = palette.onSurfaceSecondary,
-                        )
-                        if (state.settings.notificationBadgesEnabled && !state.isBadgeAccessGranted) {
-                            OutlinedButton(
-                                onClick = viewModel::openNotificationAccessSettings,
-                                shape = RoundedCornerShape(AuroraRadii.input),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .defaultMinSize(minHeight = AuroraSpacing.minTouchTarget),
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.settings_badges_grant_cta),
-                                    color = palette.accent,
-                                )
+                        if (state.badgeCapability != BadgeServiceCapability.UNSUPPORTED_IN_BUILD) {
+                            SettingsSwitchRow(
+                                label = stringResource(R.string.settings_badges_toggle),
+                                checked = state.settings.notificationBadgesEnabled,
+                                onCheckedChange = { v ->
+                                    viewModel.updateSettings { it.copy(notificationBadgesEnabled = v) }
+                                },
+                            )
+                            Text(
+                                text = stringResource(R.string.settings_badges_subtitle),
+                                style = AuroraTypography.bodyMedium,
+                                color = palette.onSurfaceSecondary,
+                            )
+                            if (state.settings.notificationBadgesEnabled && state.badgeCapability == BadgeServiceCapability.PERMISSION_REQUIRED) {
+                                OutlinedButton(
+                                    onClick = viewModel::openNotificationAccessSettings,
+                                    shape = RoundedCornerShape(AuroraRadii.input),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .defaultMinSize(minHeight = AuroraSpacing.minTouchTarget),
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.settings_badges_grant_cta),
+                                        color = palette.accent,
+                                    )
+                                }
                             }
                         }
 

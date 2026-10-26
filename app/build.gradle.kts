@@ -1,16 +1,56 @@
+import java.util.Properties
+
 plugins {
     id("aurora.android.application")
     id("aurora.android.compose")
     id("aurora.android.hilt")
 }
 
+val keystoreProps = Properties().apply {
+    val file = rootProject.file("keystore.properties")
+    if (file.isFile) {
+        file.inputStream().use(::load)
+    }
+}
+
+val releaseStorePath = keystoreProps.getProperty("storeFile")
+    ?: System.getenv("AURORA_KEYSTORE_PATH")
+val releaseStoreFile = releaseStorePath?.let { rootProject.file(it) }?.takeIf { it.isFile }
+
 android {
     namespace = "app.aurora.launcher"
 
     defaultConfig {
         applicationId = "app.aurora.launcher"
-        versionCode = 1
-        versionName = "1.1.0"
+        versionCode = 2
+        versionName = "1.1.1"
+    }
+
+    flavorDimensions += "edition"
+    productFlavors {
+        create("sideload") {
+            dimension = "edition"
+            isDefault = true
+        }
+        create("full") {
+            dimension = "edition"
+        }
+    }
+
+    signingConfigs {
+        if (releaseStoreFile != null) {
+            create("release") {
+                storeFile = releaseStoreFile
+                storePassword = keystoreProps.getProperty("storePassword")
+                    ?: System.getenv("AURORA_KEYSTORE_PASSWORD")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                    ?: System.getenv("AURORA_KEY_ALIAS")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+                    ?: System.getenv("AURORA_KEY_PASSWORD")
+                enableV2Signing = true
+                enableV3Signing = true
+            }
+        }
     }
 
     buildTypes {
@@ -21,7 +61,8 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release")
+                ?: signingConfigs.getByName("debug")
         }
         create("benchmark") {
             initWith(buildTypes.getByName("release"))

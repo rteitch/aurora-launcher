@@ -110,6 +110,7 @@ data class SpotlightUiState(
     val results: SpotlightResults = SpotlightResults("", emptyList(), emptyList(), emptyList(), emptyList()),
     val recentQueries: List<String> = emptyList(),
     val settings: LauncherSettings = LauncherSettings(),
+    val isContactsSupported: Boolean = false,
     val hasContactsPermission: Boolean = false,
 )
 
@@ -135,8 +136,9 @@ class SpotlightViewModel @Inject constructor(
         settingsRepository.settings,
         searchHistoryRepository.recentQueries,
     ) { rawQuery, effectiveQuery, apps, settings, history ->
-        val hasPerm = contactsPermFlow.value || contactsAndSettingsGateway.hasContactsPermission()
-        val contacts = if (settings.includeContactsInSearch && hasPerm && effectiveQuery.isNotBlank()) {
+        val contactsSupported = contactsAndSettingsGateway.isContactsPermissionDeclaredInPackage()
+        val hasPerm = contactsSupported && (contactsPermFlow.value || contactsAndSettingsGateway.hasContactsPermission())
+        val contacts = if (contactsSupported && settings.includeContactsInSearch && hasPerm && effectiveQuery.isNotBlank()) {
             contactsAndSettingsGateway.searchContacts(effectiveQuery).map {
                 ContactSearchResult(
                     id = it.contactId,
@@ -173,6 +175,7 @@ class SpotlightViewModel @Inject constructor(
             results = searchResults,
             recentQueries = if (settings.saveSearchHistory) history else emptyList(),
             settings = settings,
+            isContactsSupported = contactsSupported,
             hasContactsPermission = hasPerm,
         )
     }.stateIn(
@@ -451,7 +454,7 @@ fun SpotlightOverlay(
                                 }
                             }
                         } else {
-                            if (state.settings.includeContactsInSearch && !state.hasContactsPermission) {
+                            if (state.isContactsSupported && state.settings.includeContactsInSearch && !state.hasContactsPermission) {
                                 item(key = "contacts_perm_cta") {
                                     OutlinedButton(
                                         onClick = { contactsPermLauncher.launch(Manifest.permission.READ_CONTACTS) },

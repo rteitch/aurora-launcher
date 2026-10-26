@@ -1,7 +1,6 @@
 package app.aurora.launcher.core.platform
 
 import android.app.Notification
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
@@ -75,6 +74,12 @@ class NotificationBadgeStore @Inject constructor() {
     }
 }
 
+enum class BadgeServiceCapability {
+    UNSUPPORTED_IN_BUILD,
+    PERMISSION_REQUIRED,
+    GRANTED,
+}
+
 @EntryPoint
 @InstallIn(SingletonComponent::class)
 interface NotificationBadgeEntryPoint {
@@ -86,14 +91,27 @@ interface NotificationBadgeEntryPoint {
 class NotificationBadgeGateway @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
-    fun isNotificationAccessGranted(): Boolean {
+    // Query PackageManager by action intent rather than class literal so R8 strips the service in sideload builds.
+    fun readCapability(): BadgeServiceCapability {
+        val declaredServices = safeSystemCall {
+            val query = Intent("android.service.notification.NotificationListenerService")
+                .setPackage(context.packageName)
+            @Suppress("DEPRECATION")
+            context.packageManager.queryIntentServices(query, 0)
+                .mapNotNull { it.serviceInfo?.name }
+        }.getOrNull().orEmpty()
         val enabled = safeSystemCall {
             Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
         }.getOrNull().orEmpty()
-        if (enabled.isBlank()) return false
-        val expected = ComponentName(context, AuroraNotificationListenerService::class.java).flattenToString()
-        val shortExpected = ComponentName(context, AuroraNotificationListenerService::class.java).flattenToShortString()
-        return enabled.split(':').any { it == expected || it == shortExpected }
+        return resolveCapability(
+            packageName = context.packageName,
+            declaredServiceNames = declaredServices,
+            enabledListenersColonSeparated = enabled,
+        )
+    }
+
+    fun isNotificationAccessGranted(): Boolean {
+        return readCapability() == BadgeServiceCapability.GRANTED
     }
 
     fun openNotificationListenerSettings(): SystemResult<Unit> {
@@ -102,6 +120,36 @@ class NotificationBadgeGateway @Inject constructor(
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(intent)
+        }
+    }
+
+    companion object {
+        fun resolveCapability(
+            packageName: String,
+            declaredServiceNames: List<String>,
+            enabledListenersColonSeparated: String,
+        ): BadgeServiceCapability {
+            if (declaredServiceNames.isEmpty()) return BadgeServiceCapability.UNSUPPORTED_IN_BUILD
+            val enabledTokens = enabledListenersColonSeparated
+                .split(':')
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+                .toSet()
+            val isGranted = declaredServiceNames.any { serviceClassName ->
+                val resolvedName = if (serviceClassName.startsWith(".")) {
+                    "$packageName$serviceClassName"
+                } else {
+                    serviceClassName
+                }
+                val full = "$packageName/$resolvedName"
+                val short = if (resolvedName.startsWith("$packageName.")) {
+                    "$packageName/${resolvedName.removePrefix(packageName)}"
+                } else {
+                    full
+                }
+                full in enabledTokens || short in enabledTokens
+            }
+            return if (isGranted) BadgeServiceCapability.GRANTED else BadgeServiceCapability.PERMISSION_REQUIRED
         }
     }
 }

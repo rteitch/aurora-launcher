@@ -44,7 +44,20 @@ class ContactsAndSettingsSearchGateway @Inject constructor(
         QuickSettingShortcut("security", Settings.ACTION_SECURITY_SETTINGS, listOf("security", "keamanan", "biometrik")),
     )
 
+    fun isContactsPermissionDeclaredInPackage(): Boolean {
+        val requested = safeSystemCall {
+            @Suppress("DEPRECATION")
+            val pkgInfo = context.packageManager.getPackageInfo(
+                context.packageName,
+                PackageManager.GET_PERMISSIONS,
+            )
+            pkgInfo.requestedPermissions?.toSet().orEmpty()
+        }.getOrNull().orEmpty()
+        return isContactsSupported(requested)
+    }
+
     fun hasContactsPermission(): Boolean {
+        if (!isContactsPermissionDeclaredInPackage()) return false
         return ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.READ_CONTACTS,
@@ -125,6 +138,12 @@ class ContactsAndSettingsSearchGateway @Inject constructor(
                     Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                 )
             }
+        }
+    }
+
+    companion object {
+        fun isContactsSupported(requestedPermissions: Set<String>): Boolean {
+            return Manifest.permission.READ_CONTACTS in requestedPermissions
         }
     }
 }
