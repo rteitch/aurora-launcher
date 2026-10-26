@@ -50,4 +50,17 @@ class PlatformGatewaysTest {
         store.consumeRevokedNotice()
         assertFalse(store.listenerRevokedNoticePending.value)
     }
+
+    @Test
+    fun `BiometricAuthGateway omits BIOMETRIC_WEAK when paired with DEVICE_CREDENTIAL below API 30`() {
+        val strongAndDevice = androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG or
+            androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
+        val weakAndDevice = androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG or
+            androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK or
+            androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
+
+        assertEquals(strongAndDevice, BiometricAuthGateway.resolveAllowedAuthenticators(28))
+        assertEquals(strongAndDevice, BiometricAuthGateway.resolveAllowedAuthenticators(29))
+        assertEquals(weakAndDevice, BiometricAuthGateway.resolveAllowedAuthenticators(30))
+    }
 }

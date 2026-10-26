@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <data-extraction-rules>
-    <!-- Whitelisting only datastore preferences automatically excludes the SQLite database (search_history, usage, lock flags). -->
+    <!-- Include sanitized layout mirror and DataStore preferences while excluding SQLite usage, search history, and app lock flags (section 9.5). -->
     <cloud-backup>
         <include domain="file" path="datastore/" />
+        <include domain="file" path="cloud_backup/" />
     </cloud-backup>
     <device-transfer>
         <include domain="file" path="datastore/" />
+        <include domain="file" path="cloud_backup/" />
     </device-transfer>
 </data-extraction-rules>

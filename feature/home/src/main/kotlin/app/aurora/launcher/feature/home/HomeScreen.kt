@@ -52,6 +52,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -384,6 +385,7 @@ fun HomeScreen(
 
                                 page.items.forEach { item ->
                                     val bounds = desktopCoords(item) ?: return@forEach
+                                    key(item.id.value) {
                                     val (cx, cy, sx, sy) = bounds
                                     val isBeingDragged = activeDrag?.draggedItemId == item.id
                                     val isHoverTarget = hoveredItemId == item.id && !isBeingDragged
@@ -660,6 +662,7 @@ fun HomeScreen(
                                             }
                                         }
                                     }
+                                    }
                                 }
                             }
                         }
@@ -733,6 +736,7 @@ fun HomeScreen(
                         }
                         for (slotIdx in 0 until slots) {
                             val dockItem = state.workspace.dockItems.getOrNull(slotIdx)
+                            key(dockItem?.id?.value ?: -(slotIdx + 1L)) {
                             Box(
                                 contentAlignment = Alignment.Center,
                                 modifier = Modifier.weight(1f),
@@ -810,6 +814,7 @@ fun HomeScreen(
                                         Spacer(modifier = Modifier.size(dockIconDp))
                                     }
                                 }
+                            }
                             }
                         }
                     }

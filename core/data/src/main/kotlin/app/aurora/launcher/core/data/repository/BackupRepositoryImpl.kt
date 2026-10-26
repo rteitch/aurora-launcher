@@ -125,6 +125,7 @@ class BackupRepositoryImpl @Inject constructor(
             dao.clearSearchHistory()
             dao.deleteAllSnapshots()
         }
+        workspaceRepository.clearCloudLayoutMirror()
         settingsRepository.resetToDefaults()
         return allocatedWidgets
     }

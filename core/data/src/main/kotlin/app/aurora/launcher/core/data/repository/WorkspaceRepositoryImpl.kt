@@ -1,5 +1,6 @@
 package app.aurora.launcher.core.data.repository
 
+import android.content.Context
 import androidx.room.withTransaction
 import app.aurora.launcher.core.data.backup.AuroraBackupPayload
 import app.aurora.launcher.core.data.backup.BackupPageDto
@@ -26,24 +27,31 @@ import app.aurora.launcher.core.model.WidgetStatus
 import app.aurora.launcher.core.model.WorkspaceItem
 import app.aurora.launcher.core.model.WorkspacePage
 import app.aurora.launcher.core.model.WorkspaceSnapshot
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.io.File
 import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class WorkspaceRepositoryImpl @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val database: AuroraDatabase,
     private val dao: AuroraDao,
 ) : WorkspaceRepository {
+
+    private val cloudBackupFile: File
+        get() = File(context.filesDir, "cloud_backup/workspace_layout.json")
 
     private val repoScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val dragMutex = Mutex()
@@ -76,13 +84,42 @@ class WorkspaceRepositoryImpl @Inject constructor(
             gridSpecFlow,
         ) { pages, items, widgets, shortcuts, spec ->
             assembleSnapshot(pages, items, widgets, shortcuts, spec)
+        }.onEach { snapshot ->
+            if (snapshot.pages.any { it.items.isNotEmpty() } || snapshot.dockItems.isNotEmpty()) {
+                repoScope.launch { syncCloudLayoutMirror(snapshot) }
+            }
         }
+    }
+
+    internal fun syncCloudLayoutMirror(snapshot: WorkspaceSnapshot) {
+        runCatching {
+            val payload = AuroraBackupPayload(
+                exportedAtEpochMs = System.currentTimeMillis(),
+                gridColumns = snapshot.gridSpec.columns,
+                gridRows = snapshot.gridSpec.rows,
+                dockSlots = snapshot.gridSpec.dockSlots,
+                pages = snapshot.pages.map { BackupPageDto(it.id.value, it.position, it.items) },
+                dockItems = snapshot.dockItems,
+                settings = null,
+            )
+            cloudBackupFile.parentFile?.mkdirs()
+            cloudBackupFile.writeText(BackupPayloadCodec.encode(payload), Charsets.UTF_8)
+        }
+    }
+
+    internal fun clearCloudLayoutMirror() {
+        runCatching { cloudBackupFile.delete() }
     }
 
     override suspend fun seedInitialWorkspaceIfEmpty(
         installedApps: List<AppEntry>,
         gridSpec: GridSpec,
     ) {
+        if (dao.getPages().isEmpty() && cloudBackupFile.exists()) {
+            val restored = runCatching { restoreFromJsonBlob(cloudBackupFile.readText(Charsets.UTF_8)) }
+                .getOrDefault(false)
+            if (restored) return
+        }
         database.withTransaction {
             if (dao.getPages().isNotEmpty() && dao.getWorkspaceItems().isNotEmpty()) {
                 return@withTransaction

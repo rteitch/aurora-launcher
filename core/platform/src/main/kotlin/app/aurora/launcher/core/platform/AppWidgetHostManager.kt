@@ -184,93 +184,97 @@ class AppWidgetHostManager @Inject constructor(
         }.getOrNull()
     }
 
+    fun toWidgetCandidate(
+        info: AppWidgetProviderInfo,
+        gridSpec: GridSpec,
+    ): WidgetProviderCandidate? = safeSystemCall {
+        val density = context.resources.displayMetrics.density.coerceAtLeast(1f)
+        val pm = context.packageManager
+        val providerComp = info.provider ?: return@safeSystemCall null
+        val profile = info.profile
+        val serial = userManager?.getSerialNumberForUser(profile) ?: 0L
+        val appInfo = pm.getApplicationInfo(providerComp.packageName, 0)
+        val appLabel = pm.getApplicationLabel(appInfo).toString()
+        val widgetLabel = info.loadLabel(pm)?.toString().takeUnless { it.isNullOrBlank() } ?: appLabel
+        val description = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            info.loadDescription(context)?.toString().orEmpty()
+        } else {
+            ""
+        }
+
+        val minWidthDp = (info.minWidth / density).toInt()
+        val minHeightDp = (info.minHeight / density).toInt()
+        val minResizeWidthDp = (info.minResizeWidth / density).toInt()
+        val minResizeHeightDp = (info.minResizeHeight / density).toInt()
+
+        val defaultSpanX = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && info.targetCellWidth > 0) {
+            info.targetCellWidth.coerceIn(1, gridSpec.columns)
+        } else {
+            WidgetSpanCalculator.dpToCells(minWidthDp, gridSpec.columns)
+        }
+        val defaultSpanY = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && info.targetCellHeight > 0) {
+            info.targetCellHeight.coerceIn(1, gridSpec.rows)
+        } else {
+            WidgetSpanCalculator.dpToCells(minHeightDp, gridSpec.rows)
+        }
+
+        val canResizeX = (info.resizeMode and AppWidgetProviderInfo.RESIZE_HORIZONTAL) != 0
+        val canResizeY = (info.resizeMode and AppWidgetProviderInfo.RESIZE_VERTICAL) != 0
+
+        val minSpanX = if (canResizeX && minResizeWidthDp > 0) {
+            WidgetSpanCalculator.dpToCells(minResizeWidthDp, gridSpec.columns)
+        } else {
+            defaultSpanX
+        }
+        val minSpanY = if (canResizeY && minResizeHeightDp > 0) {
+            WidgetSpanCalculator.dpToCells(minResizeHeightDp, gridSpec.rows)
+        } else {
+            defaultSpanY
+        }
+
+        val maxSpanX = if (!canResizeX) {
+            defaultSpanX
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && info.maxResizeWidth > 0) {
+            WidgetSpanCalculator.dpToCells((info.maxResizeWidth / density).toInt(), gridSpec.columns)
+                .coerceAtLeast(defaultSpanX)
+        } else {
+            gridSpec.columns
+        }
+        val maxSpanY = if (!canResizeY) {
+            defaultSpanY
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && info.maxResizeHeight > 0) {
+            WidgetSpanCalculator.dpToCells((info.maxResizeHeight / density).toInt(), gridSpec.rows)
+                .coerceAtLeast(defaultSpanY)
+        } else {
+            gridSpec.rows
+        }
+
+        WidgetProviderCandidate(
+            provider = ComponentKey(
+                packageName = providerComp.packageName,
+                activityClass = providerComp.className,
+                userSerial = serial,
+            ),
+            appLabel = appLabel,
+            widgetLabel = widgetLabel,
+            description = description,
+            defaultSpanX = defaultSpanX,
+            defaultSpanY = defaultSpanY,
+            minSpanX = minSpanX.coerceAtMost(defaultSpanX),
+            minSpanY = minSpanY.coerceAtMost(defaultSpanY),
+            maxSpanX = maxSpanX.coerceAtLeast(defaultSpanX),
+            maxSpanY = maxSpanY.coerceAtLeast(defaultSpanY),
+            hasConfigurationActivity = info.configure != null,
+        )
+    }.getOrNull()
+
     suspend fun listInstalledProviders(gridSpec: GridSpec): List<WidgetProviderCandidate> =
         withContext(dispatchers.io) {
-            val density = context.resources.displayMetrics.density.coerceAtLeast(1f)
-            val pm = context.packageManager
             val providers = safeSystemCall { appWidgetManager.installedProviders.orEmpty() }
                 .getOrNull()
                 .orEmpty()
 
-            providers.mapNotNull { info ->
-                safeSystemCall {
-                    val providerComp = info.provider ?: return@safeSystemCall null
-                    val profile = info.profile
-                    val serial = userManager?.getSerialNumberForUser(profile) ?: 0L
-                    val appInfo = pm.getApplicationInfo(providerComp.packageName, 0)
-                    val appLabel = pm.getApplicationLabel(appInfo).toString()
-                    val widgetLabel = info.loadLabel(pm)?.toString().takeUnless { it.isNullOrBlank() } ?: appLabel
-                    val description = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        info.loadDescription(context)?.toString().orEmpty()
-                    } else {
-                        ""
-                    }
-
-                    val minWidthDp = (info.minWidth / density).toInt()
-                    val minHeightDp = (info.minHeight / density).toInt()
-                    val minResizeWidthDp = (info.minResizeWidth / density).toInt()
-                    val minResizeHeightDp = (info.minResizeHeight / density).toInt()
-
-                    val defaultSpanX = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && info.targetCellWidth > 0) {
-                        info.targetCellWidth.coerceIn(1, gridSpec.columns)
-                    } else {
-                        WidgetSpanCalculator.dpToCells(minWidthDp, gridSpec.columns)
-                    }
-                    val defaultSpanY = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && info.targetCellHeight > 0) {
-                        info.targetCellHeight.coerceIn(1, gridSpec.rows)
-                    } else {
-                        WidgetSpanCalculator.dpToCells(minHeightDp, gridSpec.rows)
-                    }
-
-                    val canResizeX = (info.resizeMode and AppWidgetProviderInfo.RESIZE_HORIZONTAL) != 0
-                    val canResizeY = (info.resizeMode and AppWidgetProviderInfo.RESIZE_VERTICAL) != 0
-
-                    val minSpanX = if (canResizeX && minResizeWidthDp > 0) {
-                        WidgetSpanCalculator.dpToCells(minResizeWidthDp, gridSpec.columns)
-                    } else {
-                        defaultSpanX
-                    }
-                    val minSpanY = if (canResizeY && minResizeHeightDp > 0) {
-                        WidgetSpanCalculator.dpToCells(minResizeHeightDp, gridSpec.rows)
-                    } else {
-                        defaultSpanY
-                    }
-
-                    val maxSpanX = if (!canResizeX) {
-                        defaultSpanX
-                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && info.maxResizeWidth > 0) {
-                        WidgetSpanCalculator.dpToCells((info.maxResizeWidth / density).toInt(), gridSpec.columns)
-                            .coerceAtLeast(defaultSpanX)
-                    } else {
-                        gridSpec.columns
-                    }
-                    val maxSpanY = if (!canResizeY) {
-                        defaultSpanY
-                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && info.maxResizeHeight > 0) {
-                        WidgetSpanCalculator.dpToCells((info.maxResizeHeight / density).toInt(), gridSpec.rows)
-                            .coerceAtLeast(defaultSpanY)
-                    } else {
-                        gridSpec.rows
-                    }
-
-                    WidgetProviderCandidate(
-                        provider = ComponentKey(
-                            packageName = providerComp.packageName,
-                            activityClass = providerComp.className,
-                            userSerial = serial,
-                        ),
-                        appLabel = appLabel,
-                        widgetLabel = widgetLabel,
-                        description = description,
-                        defaultSpanX = defaultSpanX,
-                        defaultSpanY = defaultSpanY,
-                        minSpanX = minSpanX.coerceAtMost(defaultSpanX),
-                        minSpanY = minSpanY.coerceAtMost(defaultSpanY),
-                        maxSpanX = maxSpanX.coerceAtLeast(defaultSpanX),
-                        maxSpanY = maxSpanY.coerceAtLeast(defaultSpanY),
-                        hasConfigurationActivity = info.configure != null,
-                    )
-                }.getOrNull()
-            }.sortedWith(compareBy({ it.appLabel.lowercase() }, { it.widgetLabel.lowercase() }))
+            providers.mapNotNull { info -> toWidgetCandidate(info, gridSpec) }
+                .sortedWith(compareBy({ it.appLabel.lowercase() }, { it.widgetLabel.lowercase() }))
         }
 }

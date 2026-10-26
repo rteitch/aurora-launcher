@@ -1,6 +1,7 @@
 package app.aurora.launcher.core.platform
 
 import android.content.Context
+import android.os.Build
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricManager.Authenticators
 import androidx.biometric.BiometricPrompt
@@ -17,9 +18,18 @@ import kotlin.coroutines.resume
 class BiometricAuthGateway @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
-    // DEVICE_CREDENTIAL fallback guarantees locked apps remain accessible if biometrics change or are absent (E29).
-    private val allowedAuthenticators =
-        Authenticators.BIOMETRIC_STRONG or Authenticators.BIOMETRIC_WEAK or Authenticators.DEVICE_CREDENTIAL
+    private val allowedAuthenticators = resolveAllowedAuthenticators(Build.VERSION.SDK_INT)
+
+    companion object {
+        // AndroidX Biometric forbids combining BIOMETRIC_WEAK with DEVICE_CREDENTIAL below API 30.
+        internal fun resolveAllowedAuthenticators(sdkInt: Int): Int {
+            return if (sdkInt >= Build.VERSION_CODES.R) {
+                Authenticators.BIOMETRIC_STRONG or Authenticators.BIOMETRIC_WEAK or Authenticators.DEVICE_CREDENTIAL
+            } else {
+                Authenticators.BIOMETRIC_STRONG or Authenticators.DEVICE_CREDENTIAL
+            }
+        }
+    }
 
     fun isAuthenticationAvailable(): Boolean {
         return safeSystemCall {
@@ -48,16 +58,22 @@ class BiometricAuthGateway @Inject constructor(
             }
         }
 
-        val prompt = BiometricPrompt(activity, executor, callback)
-        val promptInfo = BiometricPrompt.PromptInfo.Builder()
-            .setTitle(title)
-            .setSubtitle(subtitle)
-            .setAllowedAuthenticators(allowedAuthenticators)
-            .build()
+        val launched = safeSystemCall {
+            val prompt = BiometricPrompt(activity, executor, callback)
+            val promptInfo = BiometricPrompt.PromptInfo.Builder()
+                .setTitle(title)
+                .setSubtitle(subtitle)
+                .setAllowedAuthenticators(allowedAuthenticators)
+                .build()
+            prompt.authenticate(promptInfo)
+            cont.invokeOnCancellation {
+                safeSystemCall { prompt.cancelAuthentication() }
+            }
+            true
+        }.getOrNull() ?: false
 
-        prompt.authenticate(promptInfo)
-        cont.invokeOnCancellation {
-            safeSystemCall { prompt.cancelAuthentication() }
+        if (!launched && cont.isActive) {
+            cont.resume(false)
         }
     }
 }

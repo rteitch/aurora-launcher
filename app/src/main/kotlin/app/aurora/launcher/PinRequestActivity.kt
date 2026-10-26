@@ -1,5 +1,6 @@
 package app.aurora.launcher
 
+import android.appwidget.AppWidgetManager
 import android.content.pm.LauncherApps
 import android.os.Bundle
 import android.os.SystemClock
@@ -17,6 +18,8 @@ import app.aurora.launcher.core.data.repository.LauncherSettingsRepository
 import app.aurora.launcher.core.data.repository.WorkspaceRepository
 import app.aurora.launcher.core.designsystem.AuroraLauncherTheme
 import app.aurora.launcher.core.designsystem.R
+import app.aurora.launcher.core.model.AppWidgetId
+import app.aurora.launcher.core.platform.AppWidgetHostManager
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -36,6 +39,9 @@ class PinRequestActivity : AppCompatActivity() {
     @Inject
     lateinit var settingsRepository: LauncherSettingsRepository
 
+    @Inject
+    lateinit var appWidgetHostManager: AppWidgetHostManager
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -54,8 +60,14 @@ class PinRequestActivity : AppCompatActivity() {
         }
 
         val shortcutInfo = pinRequest.shortcutInfo
+        val widgetInfo = if (pinRequest.requestType == LauncherApps.PinItemRequest.REQUEST_TYPE_APPWIDGET) {
+            safeSystemCall { pinRequest.getAppWidgetProviderInfo(this) }.getOrNull()
+        } else {
+            null
+        }
         val itemLabel = shortcutInfo?.shortLabel?.toString()
             ?: shortcutInfo?.longLabel?.toString()
+            ?: widgetInfo?.loadLabel(packageManager)
             ?: getString(R.string.aurora_app_name)
 
         setContent {
@@ -69,17 +81,49 @@ class PinRequestActivity : AppCompatActivity() {
                             onClick = {
                                 lifecycleScope.launch {
                                     lastAcceptedElapsedMs = SystemClock.elapsedRealtime()
-                                    val accepted = safeSystemCall { pinRequest.accept() }.getOrNull() ?: false
-                                    if (accepted && shortcutInfo != null) {
-                                        val settings = settingsRepository.settings.first()
-                                        val serial = userManager?.getSerialNumberForUser(shortcutInfo.userHandle) ?: 0L
-                                        workspaceRepository.pinShortcut(
-                                            shortcutId = shortcutInfo.id,
-                                            packageName = shortcutInfo.`package`,
-                                            userSerial = serial,
-                                            label = itemLabel,
-                                            gridSpec = settings.effectiveGridSpec(isTabletViewport = false),
-                                        )
+                                    val config = resources.configuration
+                                    val isTablet = config.smallestScreenWidthDp >= 600 || config.screenWidthDp >= 600
+                                    val settings = settingsRepository.settings.first()
+                                    val gridSpec = settings.effectiveGridSpec(isTabletViewport = isTablet)
+
+                                    when {
+                                        shortcutInfo != null -> {
+                                            val accepted = safeSystemCall { pinRequest.accept() }.getOrNull() ?: false
+                                            if (accepted) {
+                                                val serial = userManager?.getSerialNumberForUser(shortcutInfo.userHandle) ?: 0L
+                                                workspaceRepository.pinShortcut(
+                                                    shortcutId = shortcutInfo.id,
+                                                    packageName = shortcutInfo.`package`,
+                                                    userSerial = serial,
+                                                    label = itemLabel,
+                                                    gridSpec = gridSpec,
+                                                )
+                                            }
+                                        }
+                                        widgetInfo != null -> {
+                                            val allocatedId = appWidgetHostManager.allocateWidgetId()
+                                            if (allocatedId > 0) {
+                                                val extras = Bundle().apply {
+                                                    putInt(AppWidgetManager.EXTRA_APPWIDGET_ID, allocatedId)
+                                                }
+                                                val accepted = safeSystemCall { pinRequest.accept(extras) }.getOrNull() ?: false
+                                                val candidate = appWidgetHostManager.toWidgetCandidate(widgetInfo, gridSpec)
+                                                if (accepted && candidate != null) {
+                                                    val placed = workspaceRepository.placeWidget(
+                                                        candidate = candidate,
+                                                        appWidgetId = AppWidgetId(allocatedId),
+                                                        preferredPageId = null,
+                                                        gridSpec = gridSpec,
+                                                        needsConfig = candidate.hasConfigurationActivity,
+                                                    )
+                                                    if (placed == null) {
+                                                        appWidgetHostManager.deleteWidgetId(allocatedId)
+                                                    }
+                                                } else {
+                                                    appWidgetHostManager.deleteWidgetId(allocatedId)
+                                                }
+                                            }
+                                        }
                                     }
                                     finish()
                                 }
