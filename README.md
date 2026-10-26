@@ -3,9 +3,9 @@
   <h1>Aurora Launcher</h1>
   <p>A fast, zero-telemetry native Android home launcher built with Kotlin and Jetpack Compose.</p>
   <p>
-    <a href="https://github.com/rteitch/aurora-launcher/releases/download/v1.1.1/aurora-launcher-v1.1.1.apk"><strong>Download APK v1.1.1 (GitHub Release)</strong></a>
+    <a href="https://github.com/rteitch/aurora-launcher/releases/download/v1.1.2/aurora-launcher-v1.1.2.apk"><strong>Download APK v1.1.2 (GitHub Release)</strong></a>
     &nbsp;&middot;&nbsp;
-    <a href="releases/aurora-launcher-v1.1.1.apk"><strong>Repository APK Mirror</strong></a>
+    <a href="releases/aurora-launcher-v1.1.2.apk"><strong>Repository APK Mirror</strong></a>
     &nbsp;&middot;&nbsp;
     <a href="DESIGN.md"><strong>Design System</strong></a>
     &nbsp;&middot;&nbsp;
@@ -21,12 +21,12 @@ Aurora Launcher organizes installed Android apps into a calm spatial grid with c
 
 ## Release Package
 
-Download and install the signed `v1.1.1` (`versionCode = 2`) release build on any device running Android 8.0 (`API 26`) through Android 17 (`API 36+`). Both APKs are signed with a dedicated RSA-4096 release certificate using APK Signature Scheme `v2` and `v3` (measured):
+Download and install the signed `v1.1.2` (`versionCode = 3`) release build on any device running Android 8.0 (`API 26`) through Android 17 (`API 36+`). Both APKs are signed with a dedicated RSA-4096 release certificate using APK Signature Scheme `v2` and `v3` (measured):
 
 | Edition | Download Asset | Size and SHA-256 (measured) | Play Protect Sideload Compatibility |
 | :--- | :--- | :--- | :--- |
-| **Standard (`sideload`)** | [GitHub Release (`aurora-launcher-v1.1.1.apk`)](https://github.com/rteitch/aurora-launcher/releases/download/v1.1.1/aurora-launcher-v1.1.1.apk) / [Repo Mirror](releases/aurora-launcher-v1.1.1.apk) | `2.52 MB` (`2,639,556` bytes)<br />`6f57783d6e96bb1165fc783581d9aa8ca71c8c0cabff85d6f6ce29a5fbe3c235` | Recommended for browser downloads. Declares `0` `BIND_NOTIFICATION_LISTENER_SERVICE` and `0` `READ_CONTACTS` entries in manifest and `classes.dex` to pass Google Play Protect Enhanced Fraud Protection. |
-| **Full (`full`)** | [GitHub Release (`aurora-launcher-v1.1.1-full.apk`)](https://github.com/rteitch/aurora-launcher/releases/download/v1.1.1/aurora-launcher-v1.1.1-full.apk) | `2.52 MB` (`2,639,720` bytes)<br />`4c016d8dd6c62a6fbee544f2a4ae8b1817894bbf650c45ec88e0b3453a1d3b3e` | Optional build adding opt-in Notification Count Badges and Contacts Search. Install via `adb install -r aurora-launcher-v1.1.1-full.apk` on regions enforcing Enhanced Fraud Protection. |
+| **Standard (`sideload`)** | [GitHub Release (`aurora-launcher-v1.1.2.apk`)](https://github.com/rteitch/aurora-launcher/releases/download/v1.1.2/aurora-launcher-v1.1.2.apk) / [Repo Mirror](releases/aurora-launcher-v1.1.2.apk) | `2.53 MB` (`2,655,836` bytes)<br />`dd7144e452ac35e240cadf7d26fc842ca487a329a7aeabe75e0ce8d4f3b75ec8` | Recommended for browser downloads. Declares `0` `BIND_NOTIFICATION_LISTENER_SERVICE` and `0` `READ_CONTACTS` entries in manifest and `classes.dex` to pass Google Play Protect Enhanced Fraud Protection. |
+| **Full (`full`)** | [GitHub Release (`aurora-launcher-v1.1.2-full.apk`)](https://github.com/rteitch/aurora-launcher/releases/download/v1.1.2/aurora-launcher-v1.1.2-full.apk) / [Repo Mirror](releases/aurora-launcher-v1.1.2-full.apk) | `2.53 MB` (`2,656,000` bytes)<br />`48f277ab1bfc037105e47ddd87d8aaaa0342d80f446f2f593945cfb964b2807e` | Optional build adding opt-in Notification Count Badges and Contacts Search. Install via `adb install -r aurora-launcher-v1.1.2-full.apk` on regions enforcing Enhanced Fraud Protection. |
 
 On first installation from GitHub, Android Play Protect may show a standard unrecognized-developer prompt because the open-source signing key is distributed outside Google Play. Tap **More details** and choose **Install anyway** to finish installing. Devices upgrading from debug-signed `v1.1.0` must uninstall `v1.1.0` once before installing release-signed `v1.1.1`.
 
@@ -168,7 +168,7 @@ All figures below were measured on an Android 17 (`ps16k`, `16,384` byte page si
 
 | Metric | Target Budget | Measured Value | Status |
 | :--- | :--- | :--- | :--- |
-| Minified Release APK Size | `<= 15.0 MB` | `2.52 MB` (`2,639,556` bytes `sideload`, `2,639,720` bytes `full`) | Pass |
+| Minified Release APK Size | `<= 15.0 MB` | `2.53 MB` (`2,655,836` bytes `sideload`, `2,656,000` bytes `full`) | Pass |
 | Cold Start (`am start -W`, median of 5) | `< 700 ms` | `672 ms` | Pass |
 | Warm Resume (`KEYCODE_HOME`, median of 5) | `< 150 ms` | `98.5 ms` | Pass |
 | Idle Resident Memory (`dumpsys meminfo` Total PSS) | `< 110 MB` | `52.13 MB` | Pass |

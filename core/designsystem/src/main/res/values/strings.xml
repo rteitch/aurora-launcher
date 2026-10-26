@@ -36,7 +36,7 @@
     <string name="home_empty_body">Swipe to App Library to drag apps onto your home screen, or reset default shortcuts in Settings.</string>
     <string name="home_page_indicator_cd">Page %1$d of %2$d</string>
     <string name="home_app_library_indicator_cd">App Library page</string>
-    <string name="edit_bar_widgets">Add Widget</string>
+    <string name="edit_bar_widgets">Widgets</string>
     <string name="edit_bar_wallpaper">Wallpaper</string>
     <string name="edit_bar_settings">Launcher Settings</string>
     <string name="edit_bar_done">Finish Editing</string>
@@ -84,7 +84,7 @@
     <string name="library_title">App Library</string>
     <string name="library_search_placeholder">Search App Library</string>
     <string name="library_view_categories">Categories</string>
-    <string name="library_view_alphabetical">All Apps A to Z</string>
+    <string name="library_view_alphabetical">A-Z</string>
     <string name="library_group_recently_added">Recently Added</string>
     <string name="library_group_frequently_used">Frequently Used</string>
     <string name="library_group_social">Social</string>
@@ -102,7 +102,7 @@
     <string name="library_category_auto">Automatic classification</string>
 
     <!-- Spotlight (UC-08) -->
-    <string name="spotlight_placeholder">Search apps, shortcuts, and settings</string>
+    <string name="spotlight_placeholder">Search apps or shortcuts</string>
     <string name="spotlight_section_suggested">Suggested Apps</string>
     <string name="spotlight_section_apps">Applications</string>
     <string name="spotlight_section_history">Recent Searches</string>

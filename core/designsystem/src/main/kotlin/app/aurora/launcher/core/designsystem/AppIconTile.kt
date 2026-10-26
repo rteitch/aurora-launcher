@@ -9,6 +9,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -110,6 +111,15 @@ fun AppIconTile(
         label.trim().firstOrNull { it.isLetterOrDigit() }?.uppercaseChar()?.toString() ?: "A"
     }
 
+    val tileClickModifier = when {
+        isEditMode -> Modifier
+        onLongClick != null -> Modifier.combinedClickable(
+            onClick = onClick,
+            onLongClick = onLongClick,
+        )
+        else -> Modifier.clickable(onClick = onClick)
+    }
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
@@ -125,10 +135,7 @@ fun AppIconTile(
                     customActions = accessibilityActions
                 }
             }
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongClick,
-            )
+            .then(tileClickModifier)
             .padding(vertical = 2.dp, horizontal = 2.dp),
     ) {
         Box(

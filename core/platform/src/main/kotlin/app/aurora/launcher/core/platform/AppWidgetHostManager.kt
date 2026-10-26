@@ -7,10 +7,13 @@ import android.appwidget.AppWidgetProviderInfo
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.UserManager
+import android.util.LruCache
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.MotionEvent
@@ -277,4 +280,56 @@ class AppWidgetHostManager @Inject constructor(
             providers.mapNotNull { info -> toWidgetCandidate(info, gridSpec) }
                 .sortedWith(compareBy({ it.appLabel.lowercase() }, { it.widgetLabel.lowercase() }))
         }
+
+    private val previewCache = LruCache<String, Bitmap>(32)
+
+    fun loadWidgetPreview(candidate: WidgetProviderCandidate): Bitmap? {
+        val cacheKey = "preview_" + candidate.provider.asCompactKey()
+        previewCache.get(cacheKey)?.let { return it }
+
+        val providers = safeSystemCall { appWidgetManager.installedProviders.orEmpty() }
+            .getOrNull()
+            .orEmpty()
+        val info = providers.firstOrNull {
+            it.provider?.packageName == candidate.provider.packageName &&
+                it.provider?.className == candidate.provider.activityClass
+        } ?: return null
+
+        val drawable = safeSystemCall {
+            info.loadPreviewImage(context, 0) ?: info.loadIcon(context, 0)
+        }.getOrNull() ?: return null
+
+        return safeSystemCall {
+            val w = if (drawable.intrinsicWidth > 0) drawable.intrinsicWidth else 280
+            val h = if (drawable.intrinsicHeight > 0) drawable.intrinsicHeight else 140
+            val scale = minOf(1f, 480f / maxOf(w, h))
+            val targetW = (w * scale).toInt().coerceAtLeast(1)
+            val targetH = (h * scale).toInt().coerceAtLeast(1)
+            val bitmap = Bitmap.createBitmap(targetW, targetH, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bitmap)
+            drawable.setBounds(0, 0, targetW, targetH)
+            drawable.draw(canvas)
+            previewCache.put(cacheKey, bitmap)
+            bitmap
+        }.getOrNull()
+    }
+
+    fun loadWidgetAppIcon(candidate: WidgetProviderCandidate): Bitmap? {
+        val cacheKey = "icon_" + candidate.provider.packageName
+        previewCache.get(cacheKey)?.let { return it }
+
+        val drawable = safeSystemCall {
+            context.packageManager.getApplicationIcon(candidate.provider.packageName)
+        }.getOrNull() ?: return null
+
+        return safeSystemCall {
+            val sizePx = 96
+            val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bitmap)
+            drawable.setBounds(0, 0, sizePx, sizePx)
+            drawable.draw(canvas)
+            previewCache.put(cacheKey, bitmap)
+            bitmap
+        }.getOrNull()
+    }
 }

@@ -249,7 +249,13 @@ fun AppLibraryPage(
             value = state.filterQuery,
             onValueChange = viewModel::updateFilter,
             singleLine = true,
-            placeholder = { Text(stringResource(R.string.library_search_placeholder)) },
+            placeholder = {
+                Text(
+                    text = stringResource(R.string.library_search_placeholder),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            },
             leadingIcon = {
                 Icon(
                     imageVector = Icons.Outlined.Search,
@@ -522,6 +528,8 @@ private fun LibraryModeTab(
             style = AuroraTypography.labelMedium,
             color = if (selected) palette.accent else palette.onSurfaceSecondary,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            maxLines = 1,
+            softWrap = false,
         )
     }
 }
@@ -648,7 +656,7 @@ private fun CategoryClusterCard(
             style = AuroraTypography.bodyMedium,
             color = palette.onSurface,
             fontWeight = FontWeight.Medium,
-            maxLines = 1,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
     }

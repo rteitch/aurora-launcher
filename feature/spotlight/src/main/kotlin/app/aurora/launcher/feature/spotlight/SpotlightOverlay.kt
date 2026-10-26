@@ -66,6 +66,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -303,7 +304,13 @@ fun SpotlightOverlay(
                             value = state.rawQuery,
                             onValueChange = viewModel::updateQuery,
                             singleLine = true,
-                            placeholder = { Text(stringResource(R.string.spotlight_placeholder)) },
+                            placeholder = {
+                                Text(
+                                    text = stringResource(R.string.spotlight_placeholder),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            },
                             leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Outlined.Search,

@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -737,10 +739,105 @@ fun HomeScreen(
                         for (slotIdx in 0 until slots) {
                             val dockItem = state.workspace.dockItems.getOrNull(slotIdx)
                             key(dockItem?.id?.value ?: -(slotIdx + 1L)) {
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier.weight(1f),
-                            ) {
+                                var dockCenterInWindow by remember { mutableStateOf(Offset.Zero) }
+                                val gridCols = state.workspace.gridSpec.columns
+                                val gridRows = state.workspace.gridSpec.rows
+                                val dockDragModifier = if (isEditMode && dockItem != null) {
+                                    Modifier.pointerInput(dockItem.id) {
+                                        detectDragGestures(
+                                            onDragStart = { startOffset ->
+                                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                draggedWindowPos = dockCenterInWindow + startOffset
+                                                viewModel.beginDrag(dockItem, pageIndex = -1)
+                                            },
+                                            onDrag = { change, dragAmount ->
+                                                change.consume()
+                                                draggedWindowPos += dragAmount
+                                                val gRect = gridBoundsInWindow
+                                                if (gRect != null && gRect.contains(draggedWindowPos)) {
+                                                    val relX = (draggedWindowPos.x - gRect.left).coerceAtLeast(0f)
+                                                    val relY = (draggedWindowPos.y - gRect.top).coerceAtLeast(0f)
+                                                    val cellPxW = gRect.width / gridCols
+                                                    val cellPxH = gRect.height / gridRows
+                                                    val tx = (relX / cellPxW).toInt().coerceIn(0, gridCols - 1)
+                                                    val ty = (relY / cellPxH).toInt().coerceIn(0, gridRows - 1)
+                                                    val curPage = workspacePages.getOrNull(pagerState.currentPage)
+                                                    val occ = curPage?.let {
+                                                        GridOccupancyEngine.buildOccupancyGrid(it.items, gridCols, gridRows, dockItem.id)[ty][tx]
+                                                    }
+                                                    val centerDistX = kotlin.math.abs((relX % cellPxW) - cellPxW / 2f) / cellPxW
+                                                    val centerDistY = kotlin.math.abs((relY % cellPxH) - cellPxH / 2f) / cellPxH
+                                                    hoveredItemId = if (occ != null && centerDistX < 0.32f && centerDistY < 0.32f) occ else null
+                                                } else {
+                                                    hoveredItemId = null
+                                                }
+                                            },
+                                            onDragCancel = {
+                                                hoveredItemId = null
+                                                viewModel.cancelDrag()
+                                            },
+                                            onDragEnd = {
+                                                val dRect = dockBoundsInWindow
+                                                val gRect = gridBoundsInWindow
+                                                val hoverId = hoveredItemId
+                                                hoveredItemId = null
+                                                val target: DropTarget? = when {
+                                                    hoverId != null -> DropTarget.HoverItem(hoverId)
+                                                    dRect != null && dRect.contains(draggedWindowPos) -> {
+                                                        val slotsCount = state.workspace.gridSpec.dockSlots
+                                                        val slotW = (dRect.width / slotsCount).coerceAtLeast(1f)
+                                                        val rank = ((draggedWindowPos.x - dRect.left) / slotW).toInt()
+                                                            .coerceIn(0, slotsCount - 1)
+                                                        DropTarget.DockSlot(rank)
+                                                    }
+                                                    gRect != null && gRect.contains(draggedWindowPos) -> {
+                                                        val curPage = workspacePages.getOrNull(pagerState.currentPage)
+                                                        if (curPage != null) {
+                                                            val tx = (((draggedWindowPos.x - gRect.left) / (gRect.width / gridCols)).toInt())
+                                                                .coerceIn(0, gridCols - 1)
+                                                            val ty = (((draggedWindowPos.y - gRect.top) / (gRect.height / gridRows)).toInt())
+                                                                .coerceIn(0, gridRows - 1)
+                                                            DropTarget.DesktopCell(curPage.id, tx, ty)
+                                                        } else {
+                                                            null
+                                                        }
+                                                    }
+                                                    else -> null
+                                                }
+
+                                                if (target != null) {
+                                                    viewModel.completeDrop(
+                                                        draggedItemId = dockItem.id,
+                                                        target = target,
+                                                        defaultFolderTitle = defaultFolderTitle,
+                                                        onRejected = {
+                                                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                        },
+                                                    )
+                                                } else {
+                                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    viewModel.cancelDrag()
+                                                }
+                                            },
+                                        )
+                                    }
+                                } else {
+                                    Modifier
+                                }
+                                val isDockBeingDragged = activeDrag?.draggedItemId == dockItem?.id
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .onGloballyPositioned { coords ->
+                                            val b = coords.boundsInWindow()
+                                            dockCenterInWindow = Offset(b.left, b.top)
+                                        }
+                                        .graphicsLayer {
+                                            alpha = if (isDockBeingDragged) 0.28f else 1f
+                                        }
+                                        .then(dockDragModifier),
+                                ) {
                                 when (dockItem) {
                                     is WorkspaceItem.App -> {
                                         val entry = state.catalogByKey[dockItem.component]
@@ -1121,45 +1218,66 @@ private fun EditModeTopBar(
         horizontalArrangement = Arrangement.SpaceBetween,
         modifier = modifier
             .fillMaxWidth()
+            .heightIn(max = 56.dp)
             .clip(RoundedCornerShape(AuroraRadii.card))
             .background(palette.surface.copy(alpha = 0.95f))
             .border(1.dp, palette.outline.copy(alpha = 0.35f), RoundedCornerShape(AuroraRadii.card))
-            .padding(horizontal = AuroraSpacing.sm, vertical = 4.dp),
+            .padding(horizontal = 10.dp, vertical = 6.dp),
     ) {
-        TextButton(
-            onClick = onAddWidget,
-            modifier = Modifier.defaultMinSize(minHeight = AuroraSpacing.minTouchTarget),
-        ) {
-            Icon(Icons.Outlined.Widgets, contentDescription = null, tint = palette.accent)
-            Spacer(Modifier.width(4.dp))
-            Text(stringResource(R.string.edit_bar_widgets), color = palette.onSurface)
-        }
-        IconButton(
-            onClick = onCycleWallpaper,
-            modifier = Modifier.defaultMinSize(
-                minWidth = AuroraSpacing.minTouchTarget,
-                minHeight = AuroraSpacing.minTouchTarget,
-            ),
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .defaultMinSize(minHeight = 36.dp)
+                .clip(RoundedCornerShape(AuroraRadii.input))
+                .background(palette.surfaceVariant)
+                .clickable(onClick = onAddWidget)
+                .padding(horizontal = 12.dp, vertical = 6.dp),
         ) {
             Icon(
-                imageVector = Icons.Outlined.Wallpaper,
-                contentDescription = stringResource(R.string.edit_bar_wallpaper),
-                tint = palette.onSurface,
+                imageVector = Icons.Outlined.Widgets,
+                contentDescription = null,
+                tint = palette.accent,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = stringResource(R.string.edit_bar_widgets),
+                style = AuroraTypography.labelMedium,
+                color = palette.onSurface,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                softWrap = false,
             )
         }
-        IconButton(
-            onClick = onOpenSettings,
-            modifier = Modifier.defaultMinSize(
-                minWidth = AuroraSpacing.minTouchTarget,
-                minHeight = AuroraSpacing.minTouchTarget,
-            ),
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Icon(
-                imageVector = Icons.Outlined.Settings,
-                contentDescription = stringResource(R.string.edit_bar_settings),
-                tint = palette.onSurface,
-            )
+            IconButton(
+                onClick = onCycleWallpaper,
+                modifier = Modifier.size(38.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Wallpaper,
+                    contentDescription = stringResource(R.string.edit_bar_wallpaper),
+                    tint = palette.onSurface,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+            IconButton(
+                onClick = onOpenSettings,
+                modifier = Modifier.size(38.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Settings,
+                    contentDescription = stringResource(R.string.edit_bar_settings),
+                    tint = palette.onSurface,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
         }
+
         Button(
             onClick = onFinishEdit,
             colors = ButtonDefaults.buttonColors(
@@ -1167,11 +1285,22 @@ private fun EditModeTopBar(
                 contentColor = palette.onAccent,
             ),
             shape = RoundedCornerShape(AuroraRadii.input),
-            modifier = Modifier.defaultMinSize(minHeight = 40.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
+            modifier = Modifier.height(36.dp),
         ) {
-            Icon(Icons.Outlined.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+            Icon(
+                imageVector = Icons.Outlined.Check,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+            )
             Spacer(Modifier.width(4.dp))
-            Text(stringResource(R.string.action_done))
+            Text(
+                text = stringResource(R.string.action_done),
+                style = AuroraTypography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                softWrap = false,
+            )
         }
     }
 }

@@ -36,7 +36,7 @@
     <string name="home_empty_body">Geser ke App Library untuk menambahkan aplikasi ke layar utama, atau pulihkan pintasan awal di Pengaturan.</string>
     <string name="home_page_indicator_cd">Halaman %1$d dari %2$d</string>
     <string name="home_app_library_indicator_cd">Halaman App Library</string>
-    <string name="edit_bar_widgets">Tambah Widget</string>
+    <string name="edit_bar_widgets">Widget</string>
     <string name="edit_bar_wallpaper">Wallpaper</string>
     <string name="edit_bar_settings">Pengaturan</string>
     <string name="edit_bar_done">Selesai Edit</string>
@@ -84,7 +84,7 @@
     <string name="library_title">App Library</string>
     <string name="library_search_placeholder">Cari di App Library</string>
     <string name="library_view_categories">Kategori</string>
-    <string name="library_view_alphabetical">Semua Aplikasi A sampai Z</string>
+    <string name="library_view_alphabetical">A-Z</string>
     <string name="library_group_recently_added">Baru Ditambahkan</string>
     <string name="library_group_frequently_used">Sering Dipakai</string>
     <string name="library_group_social">Sosial</string>
@@ -102,7 +102,7 @@
     <string name="library_category_auto">Klasifikasi otomatis</string>
 
     <!-- Spotlight (UC-08) -->
-    <string name="spotlight_placeholder">Cari aplikasi, pintasan, dan pengaturan</string>
+    <string name="spotlight_placeholder">Cari aplikasi atau pintasan</string>
     <string name="spotlight_section_suggested">Saran Aplikasi</string>
     <string name="spotlight_section_apps">Aplikasi</string>
     <string name="spotlight_section_history">Pencarian Terakhir</string>

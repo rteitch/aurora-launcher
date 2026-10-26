@@ -1,10 +1,12 @@
 package app.aurora.launcher.feature.widgets
 
 import android.app.Activity
+import android.graphics.Bitmap
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -20,6 +22,7 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -57,7 +60,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
@@ -368,49 +375,12 @@ fun WidgetPickerOverlay(
                                     )
                                 }
                                 items(list, key = { it.provider.asCompactKey() }) { candidate ->
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(AuroraRadii.card))
-                                            .background(palette.surfaceVariant)
-                                            .padding(AuroraSpacing.md),
-                                    ) {
-                                        Column(
-                                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                                            modifier = Modifier.weight(1f),
-                                        ) {
-                                            Text(
-                                                text = candidate.widgetLabel,
-                                                style = AuroraTypography.bodyLarge,
-                                                color = palette.onSurface,
-                                                fontWeight = FontWeight.Medium,
-                                            )
-                                            Text(
-                                                text = stringResource(
-                                                    R.string.widgets_span_badge,
-                                                    candidate.defaultSpanX,
-                                                    candidate.defaultSpanY,
-                                                ),
-                                                style = AuroraTypography.labelMedium,
-                                                color = palette.onSurfaceSecondary,
-                                            )
-                                            if (candidate.description.isNotBlank()) {
-                                                Text(
-                                                    text = candidate.description,
-                                                    style = AuroraTypography.bodyMedium,
-                                                    color = palette.onSurfaceSecondary,
-                                                    maxLines = 2,
-                                                    overflow = TextOverflow.Ellipsis,
-                                                )
-                                            }
-                                        }
-                                        Spacer(modifier = Modifier.width(AuroraSpacing.sm))
-                                        Button(
-                                            onClick = {
-                                                val allocated = viewModel.hostManager.allocateWidgetId()
-                                                if (allocated <= 0) return@Button
+                                    WidgetCandidateCard(
+                                        candidate = candidate,
+                                        hostManager = viewModel.hostManager,
+                                        onAddWidget = {
+                                            val allocated = viewModel.hostManager.allocateWidgetId()
+                                            if (allocated > 0) {
                                                 val boundNow = viewModel.hostManager.bindWidgetIfAllowed(allocated, candidate)
                                                 if (boundNow) {
                                                     val cfg = viewModel.hostManager.createConfigurationIntent(allocated)
@@ -443,23 +413,166 @@ fun WidgetPickerOverlay(
                                                         pendingWidgetId = -1
                                                     }
                                                 }
-                                            },
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = palette.accent,
-                                                contentColor = palette.onAccent,
-                                            ),
-                                            shape = RoundedCornerShape(AuroraRadii.input),
-                                            modifier = Modifier.defaultMinSize(minHeight = AuroraSpacing.minTouchTarget),
-                                        ) {
-                                            Text(stringResource(R.string.widgets_add_button))
-                                        }
-                                    }
+                                            }
+                                        },
+                                    )
                                 }
                             }
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun WidgetCandidateCard(
+    candidate: WidgetProviderCandidate,
+    hostManager: AppWidgetHostManager,
+    onAddWidget: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val palette = AuroraTheme.palette
+    var previewBitmap by remember(candidate.provider) { mutableStateOf<Bitmap?>(null) }
+    var appIconBitmap by remember(candidate.provider) { mutableStateOf<Bitmap?>(null) }
+
+    LaunchedEffect(candidate.provider) {
+        withContext(Dispatchers.IO) {
+            previewBitmap = hostManager.loadWidgetPreview(candidate)
+            appIconBitmap = hostManager.loadWidgetAppIcon(candidate)
+        }
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(AuroraRadii.card))
+            .background(palette.surfaceVariant)
+            .border(0.75.dp, palette.glassHairline.copy(alpha = 0.2f), RoundedCornerShape(AuroraRadii.card))
+            .padding(AuroraSpacing.md),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.weight(1f),
+            ) {
+                if (appIconBitmap != null) {
+                    Image(
+                        bitmap = appIconBitmap!!.asImageBitmap(),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(RoundedCornerShape(6.dp)),
+                    )
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = candidate.widgetLabel,
+                        style = AuroraTypography.bodyLarge,
+                        color = palette.onSurface,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (candidate.description.isNotBlank()) {
+                        Text(
+                            text = candidate.description,
+                            style = AuroraTypography.labelSmall,
+                            color = palette.onSurfaceSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.width(8.dp))
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(palette.surface)
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+            ) {
+                Text(
+                    text = stringResource(
+                        R.string.widgets_span_badge,
+                        candidate.defaultSpanX,
+                        candidate.defaultSpanY,
+                    ),
+                    style = AuroraTypography.labelSmall,
+                    color = palette.accent,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                )
+            }
+        }
+
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 96.dp, max = 150.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(palette.surface)
+                .border(0.5.dp, palette.outline.copy(alpha = 0.25f), RoundedCornerShape(12.dp))
+                .padding(8.dp),
+        ) {
+            if (previewBitmap != null) {
+                Image(
+                    bitmap = previewBitmap!!.asImageBitmap(),
+                    contentDescription = candidate.widgetLabel,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    if (appIconBitmap != null) {
+                        Image(
+                            bitmap = appIconBitmap!!.asImageBitmap(),
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(RoundedCornerShape(8.dp)),
+                        )
+                        Spacer(Modifier.height(4.dp))
+                    }
+                    Text(
+                        text = "${candidate.defaultSpanX} × ${candidate.defaultSpanY}",
+                        style = AuroraTypography.labelMedium,
+                        color = palette.onSurfaceSecondary,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+            }
+        }
+
+        Button(
+            onClick = onAddWidget,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = palette.accent,
+                contentColor = palette.onAccent,
+            ),
+            shape = RoundedCornerShape(AuroraRadii.input),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(40.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.widgets_add_button),
+                style = AuroraTypography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                softWrap = false,
+            )
         }
     }
 }
