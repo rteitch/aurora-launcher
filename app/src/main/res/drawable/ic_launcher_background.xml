@@ -7,7 +7,8 @@
     <path
         android:fillColor="#0C1017"
         android:pathData="M0,0h108v108h-108z" />
+    <!-- Isometric horizon plane for adaptive parallax depth -->
     <path
-        android:fillColor="#142234"
-        android:pathData="M0,66 Q54,50 108,68 L108,108 L0,108 Z" />
+        android:fillColor="#132235"
+        android:pathData="M0,74 L54,43 L108,74 L108,108 L0,108 Z" />
 </vector>

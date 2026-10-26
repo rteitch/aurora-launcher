@@ -45,6 +45,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.aurora.launcher.core.designsystem.AuroraIsometricLogo
 import app.aurora.launcher.core.designsystem.AuroraRadii
 import app.aurora.launcher.core.designsystem.AuroraSpacing
 import app.aurora.launcher.core.designsystem.AuroraTheme
@@ -101,12 +102,18 @@ fun OnboardingScreen(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(AuroraSpacing.md),
             ) {
-                Text(
-                    text = stringResource(R.string.aurora_app_name),
-                    style = AuroraTypography.titleMedium,
-                    color = palette.accent,
-                    fontWeight = FontWeight.SemiBold,
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(AuroraSpacing.sm),
+                ) {
+                    AuroraIsometricLogo(size = 44.dp)
+                    Text(
+                        text = stringResource(R.string.aurora_app_name),
+                        style = AuroraTypography.titleMedium,
+                        color = palette.accent,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
                 Text(
                     text = stringResource(R.string.onboarding_headline),
                     style = AuroraTypography.headlineMedium,

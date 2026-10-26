@@ -4,10 +4,14 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <!-- Separated 3-tier isometric monochrome silhouette for Android 13+ themed icons -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M26,56 C38,34 58,30 82,42 C68,48 48,50 26,56 Z" />
+        android:pathData="M54,26 L66.5,41.8 L54,49 L41.5,41.8 Z" />
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M34,74 L54,44 L74,74 L63,74 L54,60 L45,74 Z" />
+        android:pathData="M37,53 L54,62.8 L71,53 L71,57.5 L54,67.3 L37,57.5 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M33.5,65.5 L54,77.3 L74.5,65.5 L74.5,70.5 L54,82.3 L33.5,70.5 Z" />
 </vector>

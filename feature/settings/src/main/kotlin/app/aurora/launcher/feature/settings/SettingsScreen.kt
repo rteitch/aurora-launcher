@@ -74,6 +74,7 @@ import app.aurora.launcher.core.data.repository.BackupRepository
 import app.aurora.launcher.core.data.repository.LauncherSettingsRepository
 import app.aurora.launcher.core.data.repository.SnapshotSummary
 import app.aurora.launcher.core.data.repository.WorkspaceRepository
+import app.aurora.launcher.core.designsystem.AuroraIsometricLogo
 import app.aurora.launcher.core.designsystem.AuroraRadii
 import app.aurora.launcher.core.designsystem.AuroraSpacing
 import app.aurora.launcher.core.designsystem.AuroraTheme
@@ -958,14 +959,19 @@ private fun SettingsMainContent(
                     }
                 }
 
-                // 8. About & Legal
                 item(key = "grp_about") {
                     SettingsGroupCard(title = stringResource(R.string.settings_group_about)) {
-                        Text(
-                            text = stringResource(R.string.settings_version_label, versionName),
-                            style = AuroraTypography.titleMedium,
-                            color = palette.onSurface,
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(AuroraSpacing.sm),
+                        ) {
+                            AuroraIsometricLogo(size = 40.dp)
+                            Text(
+                                text = stringResource(R.string.settings_version_label, versionName),
+                                style = AuroraTypography.titleMedium,
+                                color = palette.onSurface,
+                            )
+                        }
                         OutlinedButton(
                             onClick = onOpenPrivacyPolicy,
                             shape = RoundedCornerShape(AuroraRadii.input),

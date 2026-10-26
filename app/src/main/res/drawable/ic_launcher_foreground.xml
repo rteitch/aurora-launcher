@@ -4,16 +4,42 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Outer Borealis Sky ribbon -->
+    <!-- Tier 1: Lower Isometric Workspace Deck -->
     <path
-        android:fillColor="#0B5C8A"
-        android:pathData="M24,64 C32,36 52,26 84,34 C74,46 64,54 24,64 Z" />
-    <!-- Luminous upper aurora arc -->
+        android:fillColor="#18507A"
+        android:pathData="M54,53 L75,65.2 L54,77.4 L33,65.2 Z" />
     <path
-        android:fillColor="#5CC8FF"
-        android:pathData="M26,56 C38,34 58,30 82,42 C68,48 48,50 26,56 Z" />
-    <!-- Crisp Warm Ivory horizon peak -->
+        android:fillColor="#0E4973"
+        android:pathData="M33,65.2 L54,77.4 L54,83 L33,70.8 Z" />
+    <path
+        android:fillColor="#082D49"
+        android:pathData="M54,77.4 L75,65.2 L75,70.8 L54,83 Z" />
+
+    <!-- Tier 2: Floating Isometric Glass Layer with inset northern-light bevel -->
+    <path
+        android:fillColor="#38AEF0"
+        android:pathData="M54,43.2 L71.5,53.3 L54,63.4 L36.5,53.3 Z" />
+    <path
+        android:fillColor="#BCEAFF"
+        android:pathData="M36.5,53.3 L54,43.2 L71.5,53.3 L69.8,54.3 L54,45.2 L38.2,54.3 Z" />
+    <path
+        android:fillColor="#1877B2"
+        android:pathData="M36.5,53.3 L54,63.4 L54,68.2 L36.5,58.1 Z" />
+    <path
+        android:fillColor="#0B4F7C"
+        android:pathData="M54,63.4 L71.5,53.3 L71.5,58.1 L54,68.2 Z" />
+
+    <!-- Tier 3: Crown Isometric Aurora Prism -->
     <path
         android:fillColor="#F6F5F0"
-        android:pathData="M34,74 L54,44 L74,74 L63,74 L54,60 L45,74 Z" />
+        android:pathData="M54,26 L41,42.5 L54,50 Z" />
+    <path
+        android:fillColor="#5CC8FF"
+        android:pathData="M54,26 L67,42.5 L54,50 Z" />
+    <path
+        android:fillColor="#DCE4EE"
+        android:pathData="M41,42.5 L54,50 L54,53.5 L41,46 Z" />
+    <path
+        android:fillColor="#1E82BE"
+        android:pathData="M54,50 L67,42.5 L67,46 L54,53.5 Z" />
 </vector>

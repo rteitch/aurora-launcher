@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0C1017"/>
+      <stop offset="65%" stop-color="#111C2B"/>
+      <stop offset="100%" stop-color="#172A40"/>
+    </linearGradient>
+    <linearGradient id="deckTop" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1D5D8C"/>
+      <stop offset="100%" stop-color="#113F63"/>
+    </linearGradient>
+    <linearGradient id="midTop" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#5CC8FF"/>
+      <stop offset="100%" stop-color="#228BE6"/>
+    </linearGradient>
+    <clipPath id="squircleClip">
+      <path d="M54,4 C84,4 104,24 104,54 C104,84 84,104 54,104 C24,104 4,84 4,54 C4,24 24,4 54,4 Z"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#squircleClip)">
+    <rect x="0" y="0" width="108" height="108" fill="url(#bgGrad)"/>
+    <polygon points="0,74 54,43 108,74 108,108 0,108" fill="#132235" opacity="0.72"/>
+
+    <!-- Tier 1: Lower Isometric Workspace Deck -->
+    <polygon points="54,52 78,66 54,80 30,66" fill="url(#deckTop)"/>
+    <polygon points="30,66 54,80 54,86.5 30,72.5" fill="#0E4973"/>
+    <polygon points="54,80 78,66 78,72.5 54,86.5" fill="#082D49"/>
+
+    <!-- Tier 2: Floating Isometric Glass Layer with inset northern-light bevel -->
+    <polygon points="54,41 74,52.5 54,64 34,52.5" fill="url(#midTop)"/>
+    <polygon points="34,52.5 54,41 74,52.5 72.1,53.6 54,43.2 35.9,53.6" fill="#BCEAFF"/>
+    <polygon points="34,52.5 54,64 54,69.5 34,58" fill="#1877B2"/>
+    <polygon points="54,64 74,52.5 74,58 54,69.5" fill="#0B4F7C"/>
+
+    <!-- Tier 3: Crown Isometric Aurora Prism -->
+    <polygon points="54,21.5 39,40.5 54,49.2" fill="#F6F5F0"/>
+    <polygon points="54,21.5 69,40.5 54,49.2" fill="#5CC8FF"/>
+    <polygon points="39,40.5 54,49.2 54,53.2 39,44.5" fill="#DCE4EE"/>
+    <polygon points="54,49.2 69,40.5 69,44.5 54,53.2" fill="#1E82BE"/>
+  </g>
+
+  <path d="M54,4.75 C83.5,4.75 103.25,24.5 103.25,54 C103.25,83.5 83.5,103.25 54,103.25 C24.5,103.25 4.75,83.5 4.75,54 C4.75,24.5 24.5,4.75 54,4.75 Z"
+        fill="none" stroke="#FFFFFF" stroke-opacity="0.26" stroke-width="1.5"/>
+</svg>
