@@ -22,8 +22,8 @@ android {
 
     defaultConfig {
         applicationId = "app.aurora.launcher"
-        versionCode = 4
-        versionName = "1.1.3"
+        versionCode = 5
+        versionName = "1.1.4"
     }
 
     flavorDimensions += "edition"

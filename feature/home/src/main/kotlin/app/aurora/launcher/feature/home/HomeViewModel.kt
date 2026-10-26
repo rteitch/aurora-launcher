@@ -337,6 +337,39 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    fun togglePageVisibility(pageId: PageId) {
+        viewModelScope.launch {
+            settingsRepository.updateSettings { cur ->
+                val hidden = cur.hiddenPageIds.toMutableSet()
+                if (pageId.value in hidden) {
+                    hidden.remove(pageId.value)
+                } else {
+                    val allPageIds = uiState.value.workspace.pages.map { it.id.value }.toSet()
+                    val remainingVisible = allPageIds - hidden - setOf(pageId.value)
+                    if (remainingVisible.isNotEmpty()) {
+                        hidden.add(pageId.value)
+                    }
+                }
+                cur.copy(hiddenPageIds = hidden)
+            }
+        }
+    }
+
+    fun deletePage(pageId: PageId, onResult: (Boolean) -> Unit = {}) {
+        val spec = uiState.value.workspace.gridSpec
+        viewModelScope.launch {
+            val ok = workspaceRepository.deletePage(pageId, spec)
+            if (ok) {
+                settingsRepository.updateSettings { cur ->
+                    if (pageId.value in cur.hiddenPageIds) {
+                        cur.copy(hiddenPageIds = cur.hiddenPageIds - setOf(pageId.value))
+                    } else cur
+                }
+            }
+            onResult(ok)
+        }
+    }
+
     private fun releaseDragLease() {
         activeDragLease?.close()
         activeDragLease = null

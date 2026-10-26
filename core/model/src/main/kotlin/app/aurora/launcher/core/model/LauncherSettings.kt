@@ -78,6 +78,8 @@ data class LauncherSettings(
     val topRightControlPanelEnabled: Boolean = true,
     val swipeUpAction: SwipeUpAction = SwipeUpAction.APP_LIBRARY,
     val autoReflowGrid: Boolean = false,
+    val hiddenPageIds: Set<Long> = emptySet(),
+    val showSmartHeaderOnPage1: Boolean = true,
     val includeSettingsInSearch: Boolean = false,
     val includeContactsInSearch: Boolean = false,
     val saveSearchHistory: Boolean = false,

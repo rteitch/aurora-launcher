@@ -15,28 +15,33 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.AspectRatio
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Remove
@@ -63,8 +68,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
@@ -72,6 +75,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -81,7 +85,6 @@ import app.aurora.launcher.core.designsystem.AuroraRadii
 import app.aurora.launcher.core.designsystem.AuroraSpacing
 import app.aurora.launcher.core.designsystem.AuroraTheme
 import app.aurora.launcher.core.designsystem.AuroraTypography
-import app.aurora.launcher.core.designsystem.GlassSurface
 import app.aurora.launcher.core.designsystem.R
 import app.aurora.launcher.core.model.AppWidgetId
 import app.aurora.launcher.core.model.GlassTier
@@ -93,10 +96,12 @@ import app.aurora.launcher.core.model.WidgetStatus
 import app.aurora.launcher.core.model.WorkspaceItem
 import app.aurora.launcher.core.platform.AppWidgetHostManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 data class WidgetPickerUiState(
@@ -193,7 +198,6 @@ fun WidgetPickerOverlay(
                 onDismiss()
             }
         } else if (wId > 0) {
-            // Cancel cleans up allocated appWidgetId immediately (E13).
             viewModel.hostManager.deleteWidgetId(wId)
         }
     }
@@ -245,178 +249,184 @@ fun WidgetPickerOverlay(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.54f))
-            .statusBarsPadding()
-            .navigationBarsPadding()
             .imePadding()
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 onClick = onDismiss,
-            )
-            .padding(AuroraSpacing.md),
+            ),
     ) {
-        GlassSurface(
-            tier = glassTier,
-            cornerRadius = AuroraRadii.folder,
+        Column(
             modifier = Modifier
-                .widthIn(max = 580.dp)
+                .widthIn(max = 640.dp)
                 .fillMaxWidth()
+                .fillMaxHeight(0.92f)
+                .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                .background(palette.surface.copy(alpha = if (glassTier == GlassTier.TIER_C_SOLID) 0.98f else 0.94f))
+                .navigationBarsPadding()
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
                     onClick = {},
-                ),
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(540.dp)
-                    .background(palette.surface.copy(alpha = if (glassTier == GlassTier.TIER_C_SOLID) 0.98f else 0.92f))
-                    .padding(AuroraSpacing.lg),
-                verticalArrangement = Arrangement.spacedBy(AuroraSpacing.md),
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(
-                        text = stringResource(R.string.widgets_picker_title),
-                        style = AuroraTypography.titleLarge,
-                        color = palette.onSurface,
-                    )
-                    IconButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.defaultMinSize(
-                            minWidth = AuroraSpacing.minTouchTarget,
-                            minHeight = AuroraSpacing.minTouchTarget,
-                        ),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Close,
-                            contentDescription = stringResource(R.string.action_close),
-                            tint = palette.onSurface,
-                        )
-                    }
-                }
-
-                OutlinedTextField(
-                    value = state.query,
-                    onValueChange = viewModel::updateQuery,
-                    singleLine = true,
-                    placeholder = { Text(stringResource(R.string.widgets_search_placeholder)) },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Outlined.Search,
-                            contentDescription = null,
-                            tint = palette.accent,
-                        )
-                    },
-                    shape = RoundedCornerShape(AuroraRadii.input),
-                    modifier = Modifier.fillMaxWidth(),
                 )
+                .padding(horizontal = AuroraSpacing.lg, vertical = AuroraSpacing.md),
+            verticalArrangement = Arrangement.spacedBy(AuroraSpacing.sm),
+        ) {
+            // Drag handle pill
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .width(36.dp)
+                    .height(5.dp)
+                    .clip(CircleShape)
+                    .background(palette.onSurfaceSecondary.copy(alpha = 0.35f)),
+            )
 
-                when {
-                    state.isLoading -> {
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier.fillMaxSize(),
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(AuroraSpacing.sm),
-                            ) {
-                                CircularProgressIndicator(
-                                    color = palette.accent,
-                                    modifier = Modifier.size(24.dp),
-                                )
-                                Text(
-                                    text = stringResource(R.string.widgets_loading),
-                                    style = AuroraTypography.bodyMedium,
-                                    color = palette.onSurfaceSecondary,
-                                )
-                            }
-                        }
-                    }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    text = stringResource(R.string.widgets_picker_title),
+                    style = AuroraTypography.titleLarge,
+                    color = palette.onSurface,
+                    fontWeight = FontWeight.Bold,
+                )
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.defaultMinSize(
+                        minWidth = AuroraSpacing.minTouchTarget,
+                        minHeight = AuroraSpacing.minTouchTarget,
+                    ),
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Close,
+                        contentDescription = stringResource(R.string.action_close),
+                        tint = palette.onSurface,
+                    )
+                }
+            }
 
-                    filteredGroups.isEmpty() -> {
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(AuroraSpacing.xs),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = AuroraSpacing.lg),
+            OutlinedTextField(
+                value = state.query,
+                onValueChange = viewModel::updateQuery,
+                singleLine = true,
+                placeholder = { Text(stringResource(R.string.widgets_search_placeholder)) },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Outlined.Search,
+                        contentDescription = null,
+                        tint = palette.accent,
+                    )
+                },
+                shape = RoundedCornerShape(AuroraRadii.input),
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            when {
+                state.isLoading -> {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(AuroraSpacing.sm),
                         ) {
-                            Text(
-                                text = stringResource(R.string.widgets_empty_title),
-                                style = AuroraTypography.titleMedium,
-                                color = palette.onSurface,
+                            CircularProgressIndicator(
+                                color = palette.accent,
+                                modifier = Modifier.size(24.dp),
                             )
                             Text(
-                                text = stringResource(R.string.widgets_empty_body),
+                                text = stringResource(R.string.widgets_loading),
                                 style = AuroraTypography.bodyMedium,
                                 color = palette.onSurfaceSecondary,
                             )
                         }
                     }
+                }
 
-                    else -> {
-                        LazyColumn(
-                            contentPadding = PaddingValues(bottom = AuroraSpacing.md),
-                            verticalArrangement = Arrangement.spacedBy(AuroraSpacing.md),
-                            modifier = Modifier.fillMaxSize(),
-                        ) {
-                            filteredGroups.forEach { (appName, list) ->
-                                item(key = "hdr_$appName") {
-                                    Text(
-                                        text = appName,
-                                        style = AuroraTypography.titleMedium,
-                                        color = palette.accent,
-                                        fontWeight = FontWeight.SemiBold,
-                                    )
-                                }
-                                items(list, key = { it.provider.asCompactKey() }) { candidate ->
-                                    WidgetCandidateCard(
-                                        candidate = candidate,
-                                        hostManager = viewModel.hostManager,
-                                        onAddWidget = {
-                                            val allocated = viewModel.hostManager.allocateWidgetId()
-                                            if (allocated > 0) {
-                                                val boundNow = viewModel.hostManager.bindWidgetIfAllowed(allocated, candidate)
-                                                if (boundNow) {
-                                                    val cfg = viewModel.hostManager.createConfigurationIntent(allocated)
-                                                    if (cfg != null) {
-                                                        pendingCandidate = candidate
-                                                        pendingWidgetId = allocated
-                                                        runCatching { configLauncher.launch(cfg) }.onFailure {
-                                                            viewModel.hostManager.deleteWidgetId(allocated)
-                                                            pendingCandidate = null
-                                                            pendingWidgetId = -1
-                                                        }
-                                                    } else {
-                                                        viewModel.commitPlacedWidget(
-                                                            candidate,
-                                                            allocated,
-                                                            preferredPageId,
-                                                            gridSpec,
-                                                        ) { ok ->
-                                                            onShowMessage(if (ok) addedNotice else fullNotice)
-                                                            onDismiss()
-                                                        }
-                                                    }
-                                                } else {
+                filteredGroups.isEmpty() -> {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(AuroraSpacing.xs),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = AuroraSpacing.lg),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.widgets_empty_title),
+                            style = AuroraTypography.titleMedium,
+                            color = palette.onSurface,
+                        )
+                        Text(
+                            text = stringResource(R.string.widgets_empty_body),
+                            style = AuroraTypography.bodyMedium,
+                            color = palette.onSurfaceSecondary,
+                        )
+                    }
+                }
+
+                else -> {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
+                        contentPadding = PaddingValues(bottom = AuroraSpacing.lg),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        filteredGroups.forEach { (appName, list) ->
+                            item(key = "hdr_$appName", span = { GridItemSpan(maxLineSpan) }) {
+                                Text(
+                                    text = appName,
+                                    style = AuroraTypography.titleSmall,
+                                    color = palette.accent,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.padding(top = 8.dp, bottom = 2.dp),
+                                )
+                            }
+                            items(list, key = { it.provider.asCompactKey() }) { candidate ->
+                                WidgetCandidateCard(
+                                    candidate = candidate,
+                                    hostManager = viewModel.hostManager,
+                                    onAddWidget = {
+                                        val allocated = viewModel.hostManager.allocateWidgetId()
+                                        if (allocated > 0) {
+                                            val boundNow = viewModel.hostManager.bindWidgetIfAllowed(allocated, candidate)
+                                            if (boundNow) {
+                                                val cfg = viewModel.hostManager.createConfigurationIntent(allocated)
+                                                if (cfg != null) {
                                                     pendingCandidate = candidate
                                                     pendingWidgetId = allocated
-                                                    val bindIntent = viewModel.hostManager.createBindWidgetIntent(allocated, candidate)
-                                                    runCatching { bindLauncher.launch(bindIntent) }.onFailure {
+                                                    runCatching { configLauncher.launch(cfg) }.onFailure {
                                                         viewModel.hostManager.deleteWidgetId(allocated)
                                                         pendingCandidate = null
                                                         pendingWidgetId = -1
                                                     }
+                                                } else {
+                                                    viewModel.commitPlacedWidget(
+                                                        candidate,
+                                                        allocated,
+                                                        preferredPageId,
+                                                        gridSpec,
+                                                    ) { ok ->
+                                                        onShowMessage(if (ok) addedNotice else fullNotice)
+                                                        onDismiss()
+                                                    }
+                                                }
+                                            } else {
+                                                pendingCandidate = candidate
+                                                pendingWidgetId = allocated
+                                                val bindIntent = viewModel.hostManager.createBindWidgetIntent(allocated, candidate)
+                                                runCatching { bindLauncher.launch(bindIntent) }.onFailure {
+                                                    viewModel.hostManager.deleteWidgetId(allocated)
+                                                    pendingCandidate = null
+                                                    pendingWidgetId = -1
                                                 }
                                             }
-                                        },
-                                    )
-                                }
+                                        }
+                                    },
+                                )
                             }
                         }
                     }
@@ -450,8 +460,8 @@ private fun WidgetCandidateCard(
             .clip(RoundedCornerShape(AuroraRadii.card))
             .background(palette.surfaceVariant)
             .border(0.75.dp, palette.glassHairline.copy(alpha = 0.2f), RoundedCornerShape(AuroraRadii.card))
-            .padding(AuroraSpacing.md),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -460,7 +470,7 @@ private fun WidgetCandidateCard(
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier.weight(1f),
             ) {
                 if (appIconBitmap != null) {
@@ -468,43 +478,28 @@ private fun WidgetCandidateCard(
                         bitmap = appIconBitmap!!.asImageBitmap(),
                         contentDescription = null,
                         modifier = Modifier
-                            .size(28.dp)
-                            .clip(RoundedCornerShape(6.dp)),
+                            .size(22.dp)
+                            .clip(RoundedCornerShape(5.dp)),
                     )
                 }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = candidate.widgetLabel,
-                        style = AuroraTypography.bodyLarge,
-                        color = palette.onSurface,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    if (candidate.description.isNotBlank()) {
-                        Text(
-                            text = candidate.description,
-                            style = AuroraTypography.labelSmall,
-                            color = palette.onSurfaceSecondary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
+                Text(
+                    text = candidate.widgetLabel,
+                    style = AuroraTypography.labelMedium,
+                    color = palette.onSurface,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(4.dp))
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(6.dp))
                     .background(palette.surface)
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
             ) {
                 Text(
-                    text = stringResource(
-                        R.string.widgets_span_badge,
-                        candidate.defaultSpanX,
-                        candidate.defaultSpanY,
-                    ),
+                    text = "${candidate.defaultSpanX}×${candidate.defaultSpanY}",
                     style = AuroraTypography.labelSmall,
                     color = palette.accent,
                     fontWeight = FontWeight.Bold,
@@ -517,11 +512,11 @@ private fun WidgetCandidateCard(
             contentAlignment = Alignment.Center,
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 96.dp, max = 150.dp)
-                .clip(RoundedCornerShape(12.dp))
+                .height(100.dp)
+                .clip(RoundedCornerShape(10.dp))
                 .background(palette.surface)
-                .border(0.5.dp, palette.outline.copy(alpha = 0.25f), RoundedCornerShape(12.dp))
-                .padding(8.dp),
+                .border(0.5.dp, palette.outline.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
+                .padding(6.dp),
         ) {
             if (previewBitmap != null) {
                 Image(
@@ -540,14 +535,14 @@ private fun WidgetCandidateCard(
                             bitmap = appIconBitmap!!.asImageBitmap(),
                             contentDescription = null,
                             modifier = Modifier
-                                .size(36.dp)
-                                .clip(RoundedCornerShape(8.dp)),
+                                .size(32.dp)
+                                .clip(RoundedCornerShape(6.dp)),
                         )
                         Spacer(Modifier.height(4.dp))
                     }
                     Text(
                         text = "${candidate.defaultSpanX} × ${candidate.defaultSpanY}",
-                        style = AuroraTypography.labelMedium,
+                        style = AuroraTypography.labelSmall,
                         color = palette.onSurfaceSecondary,
                         fontWeight = FontWeight.Medium,
                     )
@@ -564,11 +559,12 @@ private fun WidgetCandidateCard(
             shape = RoundedCornerShape(AuroraRadii.input),
             modifier = Modifier
                 .fillMaxWidth()
-                .height(40.dp),
+                .height(34.dp),
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
         ) {
             Text(
                 text = stringResource(R.string.widgets_add_button),
-                style = AuroraTypography.labelLarge,
+                style = AuroraTypography.labelMedium,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 softWrap = false,
@@ -593,7 +589,8 @@ fun WidgetHostSlot(
     val palette = AuroraTheme.palette
     val errorText = stringResource(R.string.widgets_error_card)
     val missingText = stringResource(R.string.widgets_missing_provider)
-    val cardShape = RoundedCornerShape(AuroraRadii.card)
+    val cardShape = RoundedCornerShape(22.dp)
+    var showResizeDialog by remember { mutableStateOf(false) }
 
     val shrinkW = stringResource(R.string.widgets_resize_smaller_w)
     val expandW = stringResource(R.string.widgets_resize_larger_w)
@@ -604,11 +601,6 @@ fun WidgetHostSlot(
     Box(
         modifier = modifier
             .clip(cardShape)
-            .border(
-                width = if (isEditMode) 1.5.dp else 0.5.dp,
-                color = if (isEditMode) palette.accent else palette.outline.copy(alpha = 0.25f),
-                shape = cardShape,
-            )
             .semantics {
                 customActions = buildList {
                     if (widget.spanX > widget.minSpanX) {
@@ -672,65 +664,285 @@ fun WidgetHostSlot(
         }
 
         if (isEditMode) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
+            // iOS-style minus badge at TopStart
+            Box(
+                contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .fillMaxWidth()
-                    .background(palette.surface.copy(alpha = 0.88f))
-                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                    .align(Alignment.TopStart)
+                    .padding(6.dp)
+                    .size(26.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xDD3A3A3C))
+                    .clickable { onRemove(widget.id) },
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    if (widget.spanX > widget.minSpanX) {
-                        SmallResizePill("-W") { onResize(widget.id, widget.spanX - 1, widget.spanY) }
-                    }
-                    if (widget.spanX < minOf(widget.maxSpanX, gridSpec.columns)) {
-                        SmallResizePill("+W") { onResize(widget.id, widget.spanX + 1, widget.spanY) }
-                    }
-                    if (widget.spanY > widget.minSpanY) {
-                        SmallResizePill("-H") { onResize(widget.id, widget.spanX, widget.spanY - 1) }
-                    }
-                    if (widget.spanY < minOf(widget.maxSpanY, gridSpec.rows)) {
-                        SmallResizePill("+H") { onResize(widget.id, widget.spanX, widget.spanY + 1) }
+                Icon(
+                    imageVector = Icons.Outlined.Remove,
+                    contentDescription = removeLabel,
+                    tint = Color.White,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+
+            // Universal resize button at TopEnd
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(6.dp)
+                    .size(26.dp)
+                    .clip(CircleShape)
+                    .background(palette.surface.copy(alpha = 0.92f))
+                    .border(0.5.dp, palette.glassHairline.copy(alpha = 0.3f), CircleShape)
+                    .clickable { showResizeDialog = true },
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.AspectRatio,
+                    contentDescription = stringResource(R.string.widgets_resize_dialog_title),
+                    tint = palette.accent,
+                    modifier = Modifier.size(15.dp),
+                )
+            }
+        }
+    }
+
+    if (showResizeDialog) {
+        WidgetResizeDialog(
+            widget = widget,
+            gridSpec = gridSpec,
+            onResize = { w, h -> onResize(widget.id, w, h) },
+            onDismiss = { showResizeDialog = false },
+        )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun WidgetResizeDialog(
+    widget: WorkspaceItem.Widget,
+    gridSpec: GridSpec,
+    onResize: (Int, Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val palette = AuroraTheme.palette
+    var currentW by remember(widget.spanX) { mutableIntStateOf(widget.spanX) }
+    var currentH by remember(widget.spanY) { mutableIntStateOf(widget.spanY) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Box(
+            modifier = Modifier
+                .widthIn(max = 380.dp)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(AuroraRadii.card))
+                .background(palette.surface.copy(alpha = 0.96f))
+                .border(0.75.dp, palette.glassHairline.copy(alpha = 0.25f), RoundedCornerShape(AuroraRadii.card))
+                .padding(AuroraSpacing.lg),
+        ) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(AuroraSpacing.md),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = stringResource(R.string.widgets_resize_dialog_title),
+                        style = AuroraTypography.titleMedium,
+                        color = palette.onSurface,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.size(32.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Close,
+                            contentDescription = stringResource(R.string.action_close),
+                            tint = palette.onSurface,
+                        )
                     }
                 }
-                IconButton(
-                    onClick = { onRemove(widget.id) },
-                    modifier = Modifier.size(32.dp),
+
+                Text(
+                    text = "${stringResource(R.string.widgets_resize_current)}: $currentW × $currentH",
+                    style = AuroraTypography.bodyMedium,
+                    color = palette.accent,
+                    fontWeight = FontWeight.SemiBold,
+                )
+
+                Text(
+                    text = stringResource(R.string.widgets_resize_presets),
+                    style = AuroraTypography.labelMedium,
+                    color = palette.onSurfaceSecondary,
+                    fontWeight = FontWeight.Medium,
+                )
+
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Remove,
-                        contentDescription = removeLabel,
-                        tint = palette.error,
-                        modifier = Modifier.size(18.dp),
+                    val presets = listOf(
+                        Pair(stringResource(R.string.widgets_resize_preset_2x2), Pair(2, 2)),
+                        Pair(stringResource(R.string.widgets_resize_preset_4x1), Pair(4, 1)),
+                        Pair(stringResource(R.string.widgets_resize_preset_4x2), Pair(4, 2)),
+                        Pair(stringResource(R.string.widgets_resize_preset_4x3), Pair(4, 3)),
+                        Pair(stringResource(R.string.widgets_resize_preset_4x4), Pair(4, 4)),
+                    )
+                    presets.forEach { (label, dim) ->
+                        val (pw, ph) = dim
+                        val isSelected = currentW == pw && currentH == ph
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isSelected) palette.accent else palette.surfaceVariant)
+                                .clickable {
+                                    currentW = pw
+                                    currentH = ph
+                                    onResize(pw, ph)
+                                }
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                        ) {
+                            Text(
+                                text = label,
+                                style = AuroraTypography.labelSmall,
+                                color = if (isSelected) palette.onAccent else palette.onSurface,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+                    }
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = stringResource(R.string.widgets_resize_width),
+                        style = AuroraTypography.bodyMedium,
+                        color = palette.onSurface,
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        IconButton(
+                            onClick = {
+                                if (currentW > 1) {
+                                    currentW -= 1
+                                    onResize(currentW, currentH)
+                                }
+                            },
+                            enabled = currentW > 1,
+                            modifier = Modifier.size(36.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Remove,
+                                contentDescription = stringResource(R.string.widgets_resize_smaller_w),
+                                tint = if (currentW > 1) palette.onSurface else palette.onSurfaceSecondary.copy(alpha = 0.3f),
+                            )
+                        }
+                        Text(
+                            text = "$currentW",
+                            style = AuroraTypography.titleMedium,
+                            color = palette.onSurface,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        IconButton(
+                            onClick = {
+                                if (currentW < gridSpec.columns) {
+                                    currentW += 1
+                                    onResize(currentW, currentH)
+                                }
+                            },
+                            enabled = currentW < gridSpec.columns,
+                            modifier = Modifier.size(36.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Add,
+                                contentDescription = stringResource(R.string.widgets_resize_larger_w),
+                                tint = if (currentW < gridSpec.columns) palette.onSurface else palette.onSurfaceSecondary.copy(alpha = 0.3f),
+                            )
+                        }
+                    }
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = stringResource(R.string.widgets_resize_height),
+                        style = AuroraTypography.bodyMedium,
+                        color = palette.onSurface,
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        IconButton(
+                            onClick = {
+                                if (currentH > 1) {
+                                    currentH -= 1
+                                    onResize(currentW, currentH)
+                                }
+                            },
+                            enabled = currentH > 1,
+                            modifier = Modifier.size(36.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Remove,
+                                contentDescription = stringResource(R.string.widgets_resize_smaller_h),
+                                tint = if (currentH > 1) palette.onSurface else palette.onSurfaceSecondary.copy(alpha = 0.3f),
+                            )
+                        }
+                        Text(
+                            text = "$currentH",
+                            style = AuroraTypography.titleMedium,
+                            color = palette.onSurface,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        IconButton(
+                            onClick = {
+                                if (currentH < gridSpec.rows) {
+                                    currentH += 1
+                                    onResize(currentW, currentH)
+                                }
+                            },
+                            enabled = currentH < gridSpec.rows,
+                            modifier = Modifier.size(36.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Add,
+                                contentDescription = stringResource(R.string.widgets_resize_larger_h),
+                                tint = if (currentH < gridSpec.rows) palette.onSurface else palette.onSurfaceSecondary.copy(alpha = 0.3f),
+                            )
+                        }
+                    }
+                }
+
+                Button(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = palette.accent,
+                        contentColor = palette.onAccent,
+                    ),
+                    shape = RoundedCornerShape(AuroraRadii.input),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(42.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.action_done),
+                        style = AuroraTypography.labelLarge,
+                        fontWeight = FontWeight.Bold,
                     )
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun SmallResizePill(
-    label: String,
-    onClick: () -> Unit,
-) {
-    val palette = AuroraTheme.palette
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(palette.surfaceVariant)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-    ) {
-        Text(
-            text = label,
-            style = AuroraTypography.labelSmall,
-            color = palette.accent,
-            fontWeight = FontWeight.Bold,
-        )
     }
 }
 

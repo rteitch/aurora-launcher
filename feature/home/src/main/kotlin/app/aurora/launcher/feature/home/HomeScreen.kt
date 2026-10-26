@@ -1,5 +1,7 @@
 package app.aurora.launcher.feature.home
 
+import android.content.Intent
+import android.provider.AlarmClock
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -30,6 +32,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -38,7 +43,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.Layers
+import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.material.icons.outlined.RadioButtonUnchecked
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Wallpaper
 import androidx.compose.material.icons.outlined.Widgets
@@ -66,11 +77,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
@@ -82,6 +95,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -100,8 +116,10 @@ import app.aurora.launcher.core.model.GridOccupancyEngine
 import app.aurora.launcher.core.model.HomeUiMode
 import app.aurora.launcher.core.model.ItemId
 import app.aurora.launcher.core.model.LeafPlacement
+import app.aurora.launcher.core.model.PageId
 import app.aurora.launcher.core.model.SwipeUpAction
 import app.aurora.launcher.core.model.WorkspaceItem
+import app.aurora.launcher.core.model.WorkspacePage
 import app.aurora.launcher.core.platform.rememberAppIcon
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -167,11 +185,28 @@ fun HomeScreen(
     val activeDrag = (state.mode as? HomeUiMode.EditMode)?.dragSession
     val isDragging = activeDrag != null
 
+    var showPageManagement by remember { mutableStateOf(false) }
+
     if (isEditMode) {
-        BackHandler { viewModel.exitEditMode() }
+        BackHandler {
+            if (showPageManagement) {
+                showPageManagement = false
+            } else {
+                viewModel.exitEditMode()
+            }
+        }
     }
 
-    val workspacePages = state.workspace.pages
+    val allWorkspacePages = state.workspace.pages
+    val hiddenPageIds = state.settings.hiddenPageIds
+    val workspacePages = remember(allWorkspacePages, hiddenPageIds) {
+        val visible = allWorkspacePages.filter { it.id.value !in hiddenPageIds }
+        if (visible.isEmpty() && allWorkspacePages.isNotEmpty()) {
+            listOf(allWorkspacePages.first())
+        } else {
+            visible
+        }
+    }
     val showAppLibrary = state.settings.showAppLibraryPage
     val totalPagerPages = workspacePages.size + if (showAppLibrary) 1 else 0
     val pagerState = rememberPagerState(initialPage = 0, pageCount = { totalPagerPages.coerceAtLeast(1) })
@@ -332,6 +367,7 @@ fun HomeScreen(
                             onAddWidget = { onOpenWidgetPicker(page?.id) },
                             onCycleWallpaper = viewModel::cycleWallpaperStyle,
                             onTidyUp = viewModel::packWorkspace,
+                            onOpenPageManager = { showPageManagement = true },
                             onOpenSettings = {
                                 viewModel.exitEditMode()
                                 onOpenSettings()
@@ -382,6 +418,22 @@ fun HomeScreen(
                                 val cellW = maxWidth / cols
                                 val cellH = maxHeight / rows
                                 val iconDp = state.settings.iconSizeDp.coerceIn(52, 68).dp
+
+                                if (pageIndex == 0 && state.settings.showSmartHeaderOnPage1) {
+                                    val hasRow0Item = page.items.any { item ->
+                                        val b = desktopCoords(item) ?: return@any false
+                                        b.y == 0
+                                    }
+                                    if (!hasRow0Item) {
+                                        SmartGlanceHeader(
+                                            onOpenSearch = onOpenSpotlight,
+                                            modifier = Modifier
+                                                .offset(x = 0.dp, y = 0.dp)
+                                                .size(width = maxWidth, height = cellH)
+                                                .padding(4.dp),
+                                        )
+                                    }
+                                }
 
                                 if (isEditMode) {
                                     for (ry in 0 until rows) {
@@ -727,7 +779,9 @@ fun HomeScreen(
                     workspacePageCount = workspacePages.size,
                     hasAppLibrary = showAppLibrary,
                     currentPage = pagerState.currentPage,
+                    isEditMode = isEditMode,
                     onSelectPage = { idx -> scope.launch { pagerState.animateScrollToPage(idx) } },
+                    onOpenPageManager = { showPageManagement = true },
                 )
 
                 // Sole GlassSurface on Home screen per DESIGN.md & antislop R-10.
@@ -1180,6 +1234,19 @@ fun HomeScreen(
             },
         )
     }
+
+    if (showPageManagement) {
+        PageManagementOverlay(
+            pages = state.workspace.pages,
+            hiddenPageIds = state.settings.hiddenPageIds,
+            currentPageIndex = pagerState.currentPage,
+            onToggleVisibility = viewModel::togglePageVisibility,
+            onDeletePage = { pageId ->
+                viewModel.deletePage(pageId)
+            },
+            onDismiss = { showPageManagement = false },
+        )
+    }
 }
 
 @Composable
@@ -1231,6 +1298,7 @@ private fun EditModeTopBar(
     onAddWidget: () -> Unit,
     onCycleWallpaper: () -> Unit,
     onTidyUp: () -> Unit,
+    onOpenPageManager: () -> Unit,
     onOpenSettings: () -> Unit,
     onFinishEdit: () -> Unit,
     modifier: Modifier = Modifier,
@@ -1300,6 +1368,17 @@ private fun EditModeTopBar(
                 )
             }
             IconButton(
+                onClick = onOpenPageManager,
+                modifier = Modifier.size(38.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Layers,
+                    contentDescription = stringResource(R.string.edit_bar_pages),
+                    tint = palette.accent,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+            IconButton(
                 onClick = onOpenSettings,
                 modifier = Modifier.size(38.dp),
             ) {
@@ -1344,11 +1423,13 @@ private fun PageIndicatorRow(
     workspacePageCount: Int,
     hasAppLibrary: Boolean,
     currentPage: Int,
+    isEditMode: Boolean,
     onSelectPage: (Int) -> Unit,
+    onOpenPageManager: () -> Unit,
 ) {
     val palette = AuroraTheme.palette
     val total = workspacePageCount + if (hasAppLibrary) 1 else 0
-    if (total <= 1) return
+    if (total <= 1 && !isEditMode) return
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -1356,6 +1437,9 @@ private fun PageIndicatorRow(
         modifier = Modifier
             .clip(CircleShape)
             .background(palette.iconLabelScrim)
+            .clickable {
+                if (isEditMode) onOpenPageManager()
+            }
             .padding(horizontal = 10.dp, vertical = 5.dp),
     ) {
         for (idx in 0 until total) {
@@ -1374,7 +1458,9 @@ private fun PageIndicatorRow(
                         if (selected) palette.iconLabelText else palette.iconLabelText.copy(alpha = 0.42f),
                     )
                     .semantics { contentDescription = cd }
-                    .clickable { onSelectPage(idx) },
+                    .clickable {
+                        if (isEditMode) onOpenPageManager() else onSelectPage(idx)
+                    },
             )
         }
     }
@@ -1421,4 +1507,301 @@ private fun desktopCoords(item: WorkspaceItem): Quad? = when (item) {
     }
     is WorkspaceItem.Widget -> Quad(item.cellX, item.cellY, item.spanX, item.spanY)
     is WorkspaceItem.WidgetStack -> Quad(item.cellX, item.cellY, item.spanX, item.spanY)
+}
+
+@Composable
+private fun SmartGlanceHeader(
+    onOpenSearch: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val palette = AuroraTheme.palette
+    var timeText by remember { mutableStateOf("") }
+    var dateText by remember { mutableStateOf("") }
+
+    LaunchedEffect(Unit) {
+        val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+        val dateFormat = SimpleDateFormat("EEEE, d MMMM", Locale.getDefault())
+        while (true) {
+            val now = Date()
+            timeText = timeFormat.format(now)
+            dateText = dateFormat.format(now)
+            kotlinx.coroutines.delay(1000L)
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(AuroraRadii.card))
+            .background(palette.surface.copy(alpha = 0.85f))
+            .border(0.75.dp, palette.glassHairline.copy(alpha = 0.25f), RoundedCornerShape(AuroraRadii.card))
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            Column(
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable {
+                        val clockIntent = Intent(AlarmClock.ACTION_SHOW_ALARMS)
+                        clockIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        runCatching { context.startActivity(clockIntent) }
+                    }
+                    .padding(4.dp),
+            ) {
+                Text(
+                    text = timeText.ifEmpty { "00:00" },
+                    style = AuroraTypography.titleLarge,
+                    color = palette.onSurface,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                )
+                Text(
+                    text = dateText,
+                    style = AuroraTypography.labelSmall,
+                    color = palette.onSurfaceSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(palette.surfaceVariant)
+                    .clickable(onClick = onOpenSearch)
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Search,
+                    contentDescription = stringResource(R.string.spotlight_placeholder),
+                    tint = palette.accent,
+                    modifier = Modifier.size(18.dp),
+                )
+                Text(
+                    text = "Google",
+                    style = AuroraTypography.labelMedium,
+                    color = palette.onSurface,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                IconButton(
+                    onClick = {
+                        val voiceIntent = Intent(android.speech.RecognizerIntent.ACTION_WEB_SEARCH)
+                        voiceIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        runCatching { context.startActivity(voiceIntent) }.onFailure { onOpenSearch() }
+                    },
+                    modifier = Modifier.size(24.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Mic,
+                        contentDescription = stringResource(R.string.spotlight_voice_cd),
+                        tint = palette.accent,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PageManagementOverlay(
+    pages: List<WorkspacePage>,
+    hiddenPageIds: Set<Long>,
+    currentPageIndex: Int,
+    onToggleVisibility: (PageId) -> Unit,
+    onDeletePage: (PageId) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    BackHandler(onBack = onDismiss)
+    val palette = AuroraTheme.palette
+
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.72f))
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onDismiss,
+            )
+            .padding(horizontal = AuroraSpacing.lg, vertical = AuroraSpacing.md),
+    ) {
+        Column(
+            modifier = Modifier
+                .widthIn(max = 540.dp)
+                .fillMaxSize()
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = {},
+                ),
+            verticalArrangement = Arrangement.spacedBy(AuroraSpacing.md),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.pages_manager_title),
+                        style = AuroraTypography.titleLarge,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = stringResource(R.string.pages_manager_hint),
+                        style = AuroraTypography.bodySmall,
+                        color = Color.White.copy(alpha = 0.7f),
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                Button(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = palette.accent,
+                        contentColor = palette.onAccent,
+                    ),
+                    shape = RoundedCornerShape(AuroraRadii.input),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.action_done),
+                        style = AuroraTypography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
+
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+            ) {
+                itemsIndexed(pages, key = { _, page -> page.id.value }) { idx, page ->
+                    val isHidden = page.id.value in hiddenPageIds
+                    val isCurrent = idx == currentPageIndex
+                    val itemCount = page.items.size
+
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                onToggleVisibility(page.id)
+                            },
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(190.dp)
+                                .clip(RoundedCornerShape(18.dp))
+                                .background(palette.surfaceVariant.copy(alpha = if (isHidden) 0.35f else 0.88f))
+                                .border(
+                                    width = if (isCurrent) 2.dp else 1.dp,
+                                    color = if (isCurrent) palette.accent else palette.glassHairline.copy(alpha = 0.25f),
+                                    shape = RoundedCornerShape(18.dp),
+                                )
+                                .padding(10.dp),
+                        ) {
+                            if (itemCount == 0) {
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier.fillMaxSize(),
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.pages_manager_empty),
+                                        style = AuroraTypography.labelSmall,
+                                        color = palette.onSurfaceSecondary,
+                                    )
+                                }
+                            } else {
+                                Column(
+                                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                                    modifier = Modifier.fillMaxSize(),
+                                ) {
+                                    val rows = 4
+                                    val cols = 4
+                                    for (r in 0 until rows) {
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            modifier = Modifier.fillMaxWidth(),
+                                        ) {
+                                            for (c in 0 until cols) {
+                                                val hasItem = (r * cols + c) < itemCount
+                                                Box(
+                                                    modifier = Modifier
+                                                        .weight(1f)
+                                                        .height(26.dp)
+                                                        .clip(RoundedCornerShape(6.dp))
+                                                        .background(
+                                                            if (hasItem) {
+                                                                palette.accent.copy(alpha = if (isHidden) 0.25f else 0.65f)
+                                                            } else {
+                                                                Color.Transparent
+                                                            },
+                                                        ),
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (itemCount == 0 && pages.size > 1) {
+                                IconButton(
+                                    onClick = { onDeletePage(page.id) },
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .size(28.dp)
+                                        .clip(CircleShape)
+                                        .background(palette.error.copy(alpha = 0.9f)),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.DeleteOutline,
+                                        contentDescription = stringResource(R.string.pages_manager_delete),
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                }
+                            }
+                        }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Icon(
+                                imageVector = if (!isHidden) Icons.Outlined.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
+                                contentDescription = null,
+                                tint = if (!isHidden) palette.accent else palette.onSurfaceSecondary.copy(alpha = 0.6f),
+                                modifier = Modifier.size(20.dp),
+                            )
+                            Text(
+                                text = stringResource(R.string.pages_manager_page_number, idx + 1),
+                                style = AuroraTypography.labelMedium,
+                                color = Color.White,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

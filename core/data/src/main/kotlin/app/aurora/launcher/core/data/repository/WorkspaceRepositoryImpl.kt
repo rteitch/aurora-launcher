@@ -143,10 +143,21 @@ class WorkspaceRepositoryImpl @Inject constructor(
             }
 
             val desktopApps = visible.filter { it !in dockCandidates }
-            val perPage = gridSpec.columns * gridSpec.rows
-            val chunks = desktopApps.chunked(perPage)
-                .take(GridOccupancyEngine.MAX_PAGES)
-                .ifEmpty { listOf(emptyList()) }
+            val page0Capacity = gridSpec.columns * (gridSpec.rows - 1).coerceAtLeast(1)
+            val subsequentCapacity = gridSpec.columns * gridSpec.rows
+            val chunks = mutableListOf<List<AppEntry>>()
+            var remainingApps = desktopApps
+            if (remainingApps.isNotEmpty()) {
+                val page0Apps = remainingApps.take(page0Capacity)
+                chunks.add(page0Apps)
+                remainingApps = remainingApps.drop(page0Capacity)
+            }
+            while (remainingApps.isNotEmpty() && chunks.size < GridOccupancyEngine.MAX_PAGES) {
+                val pageApps = remainingApps.take(subsequentCapacity)
+                chunks.add(pageApps)
+                remainingApps = remainingApps.drop(subsequentCapacity)
+            }
+            if (chunks.isEmpty()) chunks.add(emptyList())
 
             dao.deleteAllWorkspaceItems()
             dao.deleteAllPages()
@@ -157,7 +168,7 @@ class WorkspaceRepositoryImpl @Inject constructor(
                 )
                 pageApps.forEachIndexed { idx, app ->
                     val cellX = idx % gridSpec.columns
-                    val cellY = idx / gridSpec.columns
+                    val cellY = if (pageIndex == 0) 1 + (idx / gridSpec.columns) else idx / gridSpec.columns
                     dao.insertWorkspaceItem(
                         WorkspaceItemEntity(
                             type = "APP",
@@ -476,6 +487,19 @@ class WorkspaceRepositoryImpl @Inject constructor(
             val current = loadCurrentSnapshot(gridSpec)
             val packed = GridOccupancyEngine.packWorkspace(current)
             persistSnapshotInternal(packed)
+        }
+    }
+
+    override suspend fun deletePage(pageId: PageId, gridSpec: GridSpec): Boolean {
+        return database.withTransaction {
+            val current = loadCurrentSnapshot(gridSpec)
+            if (current.pages.size <= 1) return@withTransaction false
+            val targetPage = current.pages.firstOrNull { it.id == pageId } ?: return@withTransaction false
+            saveSnapshotInternal(current, reason = "Delete page ${pageId.value}")
+            val remainingPages = current.pages.filter { it.id != pageId }
+                .mapIndexed { idx, p -> p.copy(position = idx) }
+            persistSnapshotInternal(current.copy(pages = remainingPages))
+            true
         }
     }
 

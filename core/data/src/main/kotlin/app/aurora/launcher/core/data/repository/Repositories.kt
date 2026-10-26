@@ -64,6 +64,7 @@ interface WorkspaceRepository {
         gridSpec: GridSpec,
     ): Boolean
     suspend fun packWorkspace(gridSpec: GridSpec)
+    suspend fun deletePage(pageId: PageId, gridSpec: GridSpec): Boolean
     suspend fun reflowToGrid(currentSpec: GridSpec, targetSpec: GridSpec)
     suspend fun restoreLatestSnapshot(): Boolean
     suspend fun restoreSnapshotById(snapshotId: Long): Boolean

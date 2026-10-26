@@ -689,6 +689,12 @@ private fun SettingsMainContent(
                             onCheckedChange = { v -> viewModel.updateSettings { it.copy(autoReflowGrid = v) } },
                         )
 
+                        SettingsSwitchRow(
+                            label = stringResource(R.string.settings_smart_header_title),
+                            checked = state.settings.showSmartHeaderOnPage1,
+                            onCheckedChange = { v -> viewModel.updateSettings { it.copy(showSmartHeaderOnPage1 = v) } },
+                        )
+
                         Text(
                             text = stringResource(R.string.settings_icon_size_label, state.settings.iconSizeDp),
                             style = AuroraTypography.bodyMedium,

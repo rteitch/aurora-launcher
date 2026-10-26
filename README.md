@@ -3,9 +3,9 @@
   <h1>Aurora Launcher</h1>
   <p>A fast, zero-telemetry native Android home launcher built with Kotlin and Jetpack Compose.</p>
   <p>
-    <a href="https://github.com/rteitch/aurora-launcher/releases/download/v1.1.3/aurora-launcher-v1.1.3.apk"><strong>Download APK v1.1.3 (GitHub Release)</strong></a>
+    <a href="https://github.com/rteitch/aurora-launcher/releases/download/v1.1.4/aurora-launcher-v1.1.4.apk"><strong>Download APK v1.1.4 (GitHub Release)</strong></a>
     &nbsp;&middot;&nbsp;
-    <a href="releases/aurora-launcher-v1.1.3.apk"><strong>Repository APK Mirror</strong></a>
+    <a href="releases/aurora-launcher-v1.1.4.apk"><strong>Repository APK Mirror</strong></a>
     &nbsp;&middot;&nbsp;
     <a href="DESIGN.md"><strong>Design System</strong></a>
     &nbsp;&middot;&nbsp;
@@ -21,12 +21,12 @@ Aurora Launcher organizes installed Android apps into a calm spatial grid with c
 
 ## Release Package
 
-Download and install the signed `v1.1.3` (`versionCode = 4`) release build on any device running Android 8.0 (`API 26`) through Android 17 (`API 36+`). Both APKs are signed with a dedicated RSA-4096 release certificate using APK Signature Scheme `v2` and `v3` (measured):
+Download and install the signed `v1.1.4` (`versionCode = 5`) release build on any device running Android 8.0 (`API 26`) through Android 17 (`API 36+`). Both APKs are signed with a dedicated RSA-4096 release certificate using APK Signature Scheme `v2` and `v3` (measured):
 
 | Edition | Download Asset | Size and SHA-256 (measured) | Play Protect Sideload Compatibility |
 | :--- | :--- | :--- | :--- |
-| **Standard (`sideload`)** | [GitHub Release (`aurora-launcher-v1.1.3.apk`)](https://github.com/rteitch/aurora-launcher/releases/download/v1.1.3/aurora-launcher-v1.1.3.apk) / [Repo Mirror](releases/aurora-launcher-v1.1.3.apk) | `2.53 MB` (`2,657,956` bytes)<br />`82372a9019ae508438edaccf5b3478fbbb75a5b69132332964b8474258b8fd0a` | Recommended for browser downloads. Declares `0` `BIND_NOTIFICATION_LISTENER_SERVICE` and `0` `READ_CONTACTS` entries in manifest and `classes.dex` to pass Google Play Protect Enhanced Fraud Protection. |
-| **Full (`full`)** | [GitHub Release (`aurora-launcher-v1.1.3-full.apk`)](https://github.com/rteitch/aurora-launcher/releases/download/v1.1.3/aurora-launcher-v1.1.3-full.apk) / [Repo Mirror](releases/aurora-launcher-v1.1.3-full.apk) | `2.53 MB` (`2,658,120` bytes)<br />`e18304d7669111dbfbf8d01d039b14d24a9a39de4cb31a54732d55035de3c242` | Optional build adding opt-in Notification Count Badges and Contacts Search. Install via `adb install -r aurora-launcher-v1.1.3-full.apk` on regions enforcing Enhanced Fraud Protection. |
+| **Standard (`sideload`)** | [GitHub Release (`aurora-launcher-v1.1.4.apk`)](https://github.com/rteitch/aurora-launcher/releases/download/v1.1.4/aurora-launcher-v1.1.4.apk) / [Repo Mirror](releases/aurora-launcher-v1.1.4.apk) | `2.56 MB` (`2,684,456` bytes)<br />`0698be2883ba06c7ea74ff3c0d363c191933b60f130caf76da763105e78fcfdf` | Recommended for browser downloads. Declares `0` `BIND_NOTIFICATION_LISTENER_SERVICE` and `0` `READ_CONTACTS` entries in manifest and `classes.dex` to pass Google Play Protect Enhanced Fraud Protection. |
+| **Full (`full`)** | [GitHub Release (`aurora-launcher-v1.1.4-full.apk`)](https://github.com/rteitch/aurora-launcher/releases/download/v1.1.4/aurora-launcher-v1.1.4-full.apk) / [Repo Mirror](releases/aurora-launcher-v1.1.4-full.apk) | `2.56 MB` (`2,684,620` bytes)<br />`7a31b2fc0884d8ac152a9fb127a21be8c0634c0916409543d873c037bad36ec5` | Optional build adding opt-in Notification Count Badges and Contacts Search. Install via `adb install -r aurora-launcher-v1.1.4-full.apk` on regions enforcing Enhanced Fraud Protection. |
 
 On first installation from GitHub, Android Play Protect may show a standard unrecognized-developer prompt because the open-source signing key is distributed outside Google Play. Tap **More details** and choose **Install anyway** to finish installing. Devices upgrading from debug-signed `v1.1.0` must uninstall `v1.1.0` once before installing release-signed versions.
 
@@ -84,6 +84,29 @@ All screenshots below were captured from the running application on an Android 1
   </tr>
 </table>
 
+### Widgets, Page Management, and Smart Glance Header
+
+<table>
+  <tr>
+    <td align="center" width="25%">
+      <img src="docs/screenshots/19_smart_header_home.png" width="200" alt="Page 1 Smart Glance Header with clock, date and search" /><br />
+      <sub><strong>Smart Glance Header</strong><br />Live clock, date, Google search, and voice mic intent.</sub>
+    </td>
+    <td align="center" width="25%">
+      <img src="docs/screenshots/20_widget_picker_2col.png" width="200" alt="Full-height 92% bottom sheet widget gallery in 2 columns" /><br />
+      <sub><strong>2-Column Widget Gallery</strong><br />Full 92% bottom sheet with category chips and search.</sub>
+    </td>
+    <td align="center" width="25%">
+      <img src="docs/screenshots/21_page_management.png" width="200" alt="Page Management screen with thumbnail cards" /><br />
+      <sub><strong>Page Management</strong><br />Thumbnail cards, visibility checkmarks, and empty page deletion.</sub>
+    </td>
+    <td align="center" width="25%">
+      <img src="docs/screenshots/22_edit_mode_pages.png" width="200" alt="Edit mode with minus badges, resize controls, and pages button" /><br />
+      <sub><strong>Edit Mode Controls</strong><br />Minus badges, resize modal, and Halaman button.</sub>
+    </td>
+  </tr>
+</table>
+
 ### Settings, Auto-Reflow, and Quick Actions
 
 <table>
@@ -116,6 +139,10 @@ All screenshots below were captured from the running application on an Android 1
 
 ## Core Capabilities
 
+- **Smart Glance Header on Page 1.** Seated dynamically on row 0 of Page 1 with a live digital clock, localized date format, and Google search bar pill with voice mic intent launcher. Automatically allocates space above application icons.
+- **Full-Height 2-Column Widget Gallery.** Opens in a full 92% modal bottom sheet with rounded drag handle, category filter chips, search query input, and responsive 2-column preview cards.
+- **Universal Widget Resize & Borderless Squircles.** Eliminates neon widget border frames for authentic iOS squircle aesthetics. Adds Edit Mode circular minus badges and a dedicated resize modal supporting standard presets (`2x2`, `4x1`, `4x2`, `4x3`, `4x4`) and dimension steppers.
+- **Page Management (Edit Pages).** Tapping page indicator dots or the toolbar button in Edit Mode reveals a 2-column thumbnail card overview of all workspace pages with visibility checkmark toggles and empty page deletion.
 - **Unified Vertical Gestures.** Swipe down from any workspace area to open Spotlight Search. Swipe up from anywhere to access App Library. Both use a responsive 32dp gesture threshold.
 - **Procedural Zero-Bitmap Wallpapers.** Renders GPU-accelerated procedural backgrounds including `AURA_FLOW` (chromatic fluid glass ribbons) and `IRIDESCENT_STRATA` (spectral waves) without static image assets.
 - **Continuous Auto-Reflow & Smart Drag Displacement.** Dropping an item onto an occupied slot swaps and displaces items smoothly. The "Rapikan" (Tidy) button and "Auto-Fill Empty Spaces" preference toggle eliminate gaps across all pages in row-major order.
@@ -172,7 +199,7 @@ All figures below were measured on an Android 17 (`ps16k`, `16,384` byte page si
 
 | Metric | Target Budget | Measured Value | Status |
 | :--- | :--- | :--- | :--- |
-| Minified Release APK Size | `<= 15.0 MB` | `2.53 MB` (`2,657,956` bytes `sideload`, `2,658,120` bytes `full`) | Pass |
+| Minified Release APK Size | `<= 15.0 MB` | `2.56 MB` (`2,684,456` bytes `sideload`, `2,684,620` bytes `full`) | Pass |
 | Cold Start (`am start -W`, median of 5) | `< 700 ms` | `672 ms` | Pass |
 | Warm Resume (`KEYCODE_HOME`, median of 5) | `< 150 ms` | `98.5 ms` | Pass |
 | Idle Resident Memory (`dumpsys meminfo` Total PSS) | `< 110 MB` | `52.13 MB` | Pass |

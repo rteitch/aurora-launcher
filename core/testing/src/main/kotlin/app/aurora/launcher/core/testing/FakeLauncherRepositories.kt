@@ -134,6 +134,13 @@ class FakeWorkspaceRepository(
     override suspend fun packWorkspace(gridSpec: GridSpec) {
         current.update { GridOccupancyEngine.packWorkspace(it) }
     }
+    override suspend fun deletePage(pageId: PageId, gridSpec: GridSpec): Boolean {
+        current.update { snap ->
+            val remaining = snap.pages.filter { it.id != pageId }
+            if (remaining.isEmpty()) snap else snap.copy(pages = remaining.mapIndexed { idx, p -> p.copy(position = idx) })
+        }
+        return true
+    }
     override suspend fun reflowToGrid(currentSpec: GridSpec, targetSpec: GridSpec) {
         current.update { GridOccupancyEngine.reflowWorkspace(it, targetSpec) { pos -> PageId(50L + pos) } }
     }
