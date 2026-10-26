@@ -726,7 +726,11 @@ fun HomeScreen(
                             .fillMaxWidth()
                             .padding(horizontal = AuroraSpacing.sm, vertical = 10.dp),
                     ) {
-                        val slots = state.workspace.gridSpec.dockSlots
+                        val slots = if (isEditMode) {
+                            state.workspace.gridSpec.dockSlots
+                        } else {
+                            state.workspace.dockItems.size.coerceIn(1, state.workspace.gridSpec.dockSlots)
+                        }
                         for (slotIdx in 0 until slots) {
                             val dockItem = state.workspace.dockItems.getOrNull(slotIdx)
                             Box(

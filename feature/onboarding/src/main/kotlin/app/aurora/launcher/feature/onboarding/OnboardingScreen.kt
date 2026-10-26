@@ -92,11 +92,15 @@ fun OnboardingScreen(
             modifier = Modifier
                 .widthIn(max = 560.dp)
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = AuroraSpacing.lg, vertical = AuroraSpacing.xl),
+                .padding(horizontal = AuroraSpacing.lg, vertical = AuroraSpacing.lg),
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(AuroraSpacing.md)) {
+            Column(
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(AuroraSpacing.md),
+            ) {
                 Text(
                     text = stringResource(R.string.aurora_app_name),
                     style = AuroraTypography.titleMedium,
@@ -186,7 +190,7 @@ fun OnboardingScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(AuroraSpacing.xl))
+            Spacer(modifier = Modifier.height(AuroraSpacing.md))
 
             Column(verticalArrangement = Arrangement.spacedBy(AuroraSpacing.sm)) {
                 if (state.isDefaultHome) {

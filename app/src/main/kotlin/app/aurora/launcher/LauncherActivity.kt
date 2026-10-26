@@ -17,6 +17,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -24,15 +25,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.aurora.launcher.core.designsystem.AuroraLauncherTheme
+import app.aurora.launcher.core.designsystem.AuroraTheme
 import app.aurora.launcher.core.designsystem.ProceduralWallpaperCanvas
 import app.aurora.launcher.core.designsystem.R
 import app.aurora.launcher.core.model.ComponentKey
 import app.aurora.launcher.core.model.GlassTier
 import app.aurora.launcher.core.model.GridSpec
 import app.aurora.launcher.core.model.ShellOverlay
+import app.aurora.launcher.core.model.WallpaperStyle
 import app.aurora.launcher.core.platform.AppWidgetHostManager
 import app.aurora.launcher.feature.applibrary.AppLibraryPage
 import app.aurora.launcher.feature.controlpanel.ControlPanelOverlay
@@ -135,6 +140,26 @@ private fun LauncherShell(
         themeMode = state.settings.themeMode,
         reduceMotionOverride = state.settings.reduceMotionOverride,
     ) {
+        val palette = AuroraTheme.palette
+        val view = LocalView.current
+        val useDarkBarIcons = when {
+            !state.settings.onboardingCompleted -> !palette.isDark
+            state.overlay is ShellOverlay.Settings -> !palette.isDark
+            state.overlay != ShellOverlay.None -> false
+            state.settings.wallpaperStyle == WallpaperStyle.IVORY_MIST &&
+                state.settings.customWallpaperPath == null -> true
+            state.settings.wallpaperStyle == WallpaperStyle.BOREALIS_TWILIGHT ||
+                state.settings.wallpaperStyle == WallpaperStyle.SLATE_HORIZON -> false
+            else -> !palette.isDark
+        }
+        if (!view.isInEditMode) {
+            SideEffect {
+                val controller = WindowCompat.getInsetsController(activity.window, view)
+                controller.isAppearanceLightStatusBars = useDarkBarIcons
+                controller.isAppearanceLightNavigationBars = useDarkBarIcons
+            }
+        }
+
         if (!state.isReady) {
             Box(modifier = Modifier.fillMaxSize())
             return@AuroraLauncherTheme
