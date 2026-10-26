@@ -1,0 +1,6 @@
+HSPLapp/aurora/launcher/AuroraApplication;-><init>()V
+HSPLapp/aurora/launcher/LauncherActivity;->onCreate(Landroid/os/Bundle;)V
+HSPLapp/aurora/launcher/LauncherShellViewModel;-><init>(Lapp/aurora/launcher/core/data/repository/LauncherSettingsRepository;Lapp/aurora/launcher/core/data/repository/AppCatalogRepository;Lapp/aurora/launcher/core/data/repository/WorkspaceRepository;Lapp/aurora/launcher/core/platform/LauncherAppsGateway;Lapp/aurora/launcher/core/platform/WallpaperGateway;Lapp/aurora/launcher/core/platform/RoleGateway;Lapp/aurora/launcher/core/platform/BiometricAuthGateway;Lapp/aurora/launcher/core/platform/NotificationBadgeStore;Lapp/aurora/launcher/core/platform/AppWidgetHostManager;Lapp/aurora/launcher/core/platform/IconCacheAndLoader;)V
+PLapp/aurora/launcher/core/designsystem/SquircleShape;->createOutline-Pq9zytI(JLandroidx/compose/ui/unit/LayoutDirection;Landroidx/compose/ui/unit/Density;)Landroidx/compose/ui/graphics/Outline;
+PLapp/aurora/launcher/core/model/GridOccupancyEngine;->buildOccupancyGrid(Ljava/util/List;IILapp/aurora/launcher/core/model/ItemId;)[[Lapp/aurora/launcher/core/model/ItemId;
+PLapp/aurora/launcher/core/model/SpotlightSearchEngine;->search(Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/List;I)Lapp/aurora/launcher/core/model/SpotlightResults;

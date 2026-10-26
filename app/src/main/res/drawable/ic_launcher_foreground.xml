@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Outer Borealis Sky ribbon -->
+    <path
+        android:fillColor="#0B5C8A"
+        android:pathData="M24,64 C32,36 52,26 84,34 C74,46 64,54 24,64 Z" />
+    <!-- Luminous upper aurora arc -->
+    <path
+        android:fillColor="#5CC8FF"
+        android:pathData="M26,56 C38,34 58,30 82,42 C68,48 48,50 26,56 Z" />
+    <!-- Crisp Warm Ivory horizon peak -->
+    <path
+        android:fillColor="#F6F5F0"
+        android:pathData="M34,74 L54,44 L74,74 L63,74 L54,60 L45,74 Z" />
+</vector>
