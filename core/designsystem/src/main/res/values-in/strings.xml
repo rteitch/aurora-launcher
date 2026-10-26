@@ -1,0 +1,252 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="aurora_app_name">Aurora Launcher</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_headline">Layar utama tenang dan responsif</string>
+    <string name="onboarding_subtitle">Susun aplikasi, folder, dan widget tanpa iklan serta tanpa pelacakan cloud. Seluruh tata letak dan preferensi tersimpan privat di perangkat Anda.</string>
+    <string name="onboarding_privacy_badge">100% penyimpanan lokal. Tanpa analitik, tanpa pelacakan jaringan.</string>
+    <string name="onboarding_theme_label">Tampilan</string>
+    <string name="onboarding_grid_label">Ukuran grid</string>
+    <string name="onboarding_cta_set_default">Jadikan Launcher Utama</string>
+    <string name="onboarding_cta_preview">Lanjut Mode Pratinjau</string>
+    <string name="onboarding_default_active">Aurora aktif sebagai aplikasi layar utama Anda.</string>
+    <string name="onboarding_cta_enter_home">Buka Layar Utama</string>
+
+    <!-- Preview banner (E1) -->
+    <string name="preview_banner_title">Mode pratinjau aktif</string>
+    <string name="preview_banner_body">Atur Aurora sebagai launcher utama agar tombol Home selalu kembali ke layar ini.</string>
+    <string name="preview_banner_action">Atur Utama</string>
+
+    <!-- Common actions -->
+    <string name="action_done">Selesai</string>
+    <string name="action_cancel">Batal</string>
+    <string name="action_close">Tutup</string>
+    <string name="action_undo">Urungkan</string>
+    <string name="action_remove">Hapus</string>
+    <string name="action_confirm">Konfirmasi</string>
+    <string name="action_retry">Coba Lagi</string>
+    <string name="action_clear">Bersihkan</string>
+    <string name="action_save">Simpan</string>
+    <string name="action_open_settings">Buka Pengaturan</string>
+
+    <!-- Home & Edit Mode -->
+    <string name="home_loading">Memuat ruang kerja Anda...</string>
+    <string name="home_empty_title">Ruang kerja masih kosong</string>
+    <string name="home_empty_body">Geser ke App Library untuk menambahkan aplikasi ke layar utama, atau pulihkan pintasan awal di Pengaturan.</string>
+    <string name="home_page_indicator_cd">Halaman %1$d dari %2$d</string>
+    <string name="home_app_library_indicator_cd">Halaman App Library</string>
+    <string name="edit_bar_widgets">Tambah Widget</string>
+    <string name="edit_bar_wallpaper">Wallpaper</string>
+    <string name="edit_bar_settings">Pengaturan</string>
+    <string name="edit_bar_done">Selesai Edit</string>
+    <string name="home_suspended_app_notice">%1$s sedang dijeda atau dinonaktifkan di pengaturan sistem.</string>
+    <string name="home_launch_failed_notice">Tidak dapat membuka %1$s saat ini.</string>
+    <string name="home_orphan_placeholder_notice">Aplikasi sedang diperbarui atau tidak tersedia. Disimpan sementara 7 hari.</string>
+    <string name="home_badge_revoked_notice">Akses notifikasi dimatikan. Lencana angka disembunyikan.</string>
+    <string name="home_grid_added_notice">Ditambahkan ke layar utama.</string>
+    <string name="home_grid_full_notice">Tidak ada sel kosong yang tersisa di ruang kerja.</string>
+
+    <!-- Accessibility custom actions (E23) -->
+    <string name="a11y_enter_edit_mode">Edit tata letak layar utama</string>
+    <string name="a11y_move_left">Pindah ke kiri</string>
+    <string name="a11y_move_right">Pindah ke kanan</string>
+    <string name="a11y_move_up">Pindah ke atas</string>
+    <string name="a11y_move_down">Pindah ke bawah</string>
+    <string name="a11y_move_next_page">Pindah ke halaman berikutnya</string>
+    <string name="a11y_move_dialog">Pindahkan ke posisi...</string>
+    <string name="a11y_move_dialog_title">Pindahkan %1$s</string>
+    <string name="a11y_move_to_dock">Pindahkan ke Dock</string>
+    <string name="a11y_remove_from_home">Hapus dari Layar Utama</string>
+
+    <!-- Quick Actions Menu (UC-06, UC-16) -->
+    <string name="quick_action_remove_home">Hapus dari Layar Utama</string>
+    <string name="quick_action_uninstall">Copot Aplikasi</string>
+    <string name="quick_action_uninstall_confirm_title">Copot pemasangan %1$s?</string>
+    <string name="quick_action_uninstall_confirm_body">Android akan menghapus aplikasi ini beserta datanya dari perangkat. Pilih Hapus dari Layar Utama bila hanya ingin menyembunyikan ikon.</string>
+    <string name="quick_action_app_info">Info Aplikasi</string>
+    <string name="quick_action_lock_app">Kunci Aplikasi</string>
+    <string name="quick_action_unlock_app">Buka Kunci Aplikasi</string>
+    <string name="quick_action_hide_app">Sembunyikan Aplikasi</string>
+    <string name="quick_action_add_to_home">Tambah ke Layar Utama</string>
+    <string name="quick_action_pin_shortcut">Sematkan Pintasan</string>
+    <string name="quick_action_edit_home">Edit Layar Utama</string>
+    <string name="quick_action_category_override">Ubah Kategori</string>
+
+    <!-- Folder (UC-05) -->
+    <string name="folder_default_name">Folder</string>
+    <string name="folder_rename_label">Nama folder</string>
+    <string name="folder_rename_action">Ubah Nama Folder</string>
+    <string name="folder_remove_item">Keluarkan dari Folder</string>
+    <string name="folder_item_count">%1$d aplikasi</string>
+
+    <!-- App Library (UC-07) -->
+    <string name="library_title">App Library</string>
+    <string name="library_search_placeholder">Cari di App Library</string>
+    <string name="library_view_categories">Kategori</string>
+    <string name="library_view_alphabetical">Semua Aplikasi A sampai Z</string>
+    <string name="library_group_recently_added">Baru Ditambahkan</string>
+    <string name="library_group_frequently_used">Sering Dipakai</string>
+    <string name="library_group_social">Sosial</string>
+    <string name="library_group_productivity">Produktivitas &amp; Keuangan</string>
+    <string name="library_group_entertainment">Hiburan</string>
+    <string name="library_group_photo_video">Foto &amp; Video</string>
+    <string name="library_group_utilities">Utilitas</string>
+    <string name="library_group_games">Game</string>
+    <string name="library_group_shopping">Belanja</string>
+    <string name="library_group_travel">Perjalanan</string>
+    <string name="library_group_other">Lainnya</string>
+    <string name="library_empty_title">Aplikasi tidak ditemukan</string>
+    <string name="library_empty_body">Periksa ejaan kata kunci atau cek daftar Aplikasi Tersembunyi di Pengaturan.</string>
+    <string name="library_category_picker_title">Pilih kategori untuk %1$s</string>
+    <string name="library_category_auto">Klasifikasi otomatis</string>
+
+    <!-- Spotlight (UC-08) -->
+    <string name="spotlight_placeholder">Cari aplikasi, pintasan, dan pengaturan</string>
+    <string name="spotlight_section_suggested">Saran Aplikasi</string>
+    <string name="spotlight_section_apps">Aplikasi</string>
+    <string name="spotlight_section_history">Pencarian Terakhir</string>
+    <string name="spotlight_section_settings">Pengaturan Sistem</string>
+    <string name="spotlight_section_contacts">Kontak</string>
+    <string name="spotlight_clear_history">Hapus Riwayat</string>
+    <string name="spotlight_empty_title">Tidak ada hasil untuk \"%1$s\"</string>
+    <string name="spotlight_empty_body">Coba ketik inisial seperti \"gm\" atau telusuri daftar lengkap di App Library.</string>
+    <string name="spotlight_contacts_permission_cta">Izinkan Akses Kontak</string>
+    <string name="spotlight_setting_wifi">Wi-Fi &amp; Internet</string>
+    <string name="spotlight_setting_bluetooth">Perangkat Bluetooth</string>
+    <string name="spotlight_setting_display">Layar &amp; Kecerahan</string>
+    <string name="spotlight_setting_sound">Suara &amp; Getar</string>
+    <string name="spotlight_setting_battery">Penggunaan Baterai</string>
+    <string name="spotlight_setting_storage">Penyimpanan Perangkat</string>
+    <string name="spotlight_setting_apps">Daftar Aplikasi</string>
+    <string name="spotlight_setting_security">Keamanan &amp; Kunci Layar</string>
+
+    <!-- Widgets & Widget Stacks (UC-09, UC-10) -->
+    <string name="widgets_picker_title">Widget</string>
+    <string name="widgets_search_placeholder">Cari widget</string>
+    <string name="widgets_loading">Memindai widget terpasang...</string>
+    <string name="widgets_empty_title">Belum ada widget</string>
+    <string name="widgets_empty_body">Aplikasi terpasang yang menyediakan widget layar utama akan tampil di sini.</string>
+    <string name="widgets_span_badge">%1$d x %2$d sel</string>
+    <string name="widgets_add_button">Pasang Widget</string>
+    <string name="widgets_error_card">Widget tidak dapat dimuat</string>
+    <string name="widgets_missing_provider">Aplikasi widget telah dicopot</string>
+    <string name="widgets_resize_smaller_w">Kecilkan lebar</string>
+    <string name="widgets_resize_larger_w">Perbesar lebar</string>
+    <string name="widgets_resize_smaller_h">Kecilkan tinggi</string>
+    <string name="widgets_resize_larger_h">Perbesar tinggi</string>
+    <string name="widgets_stack_next">Widget berikutnya di tumpukan</string>
+
+    <!-- Control Panel (UC-11) -->
+    <string name="control_panel_title">Kontrol Cepat</string>
+    <string name="control_internet">Internet</string>
+    <string name="control_bluetooth">Bluetooth</string>
+    <string name="control_torch">Senter</string>
+    <string name="control_torch_unavailable">Tanpa Lampu</string>
+    <string name="control_dnd">Suara &amp; DND</string>
+    <string name="control_display">Layar</string>
+    <string name="control_launcher_settings">Pengaturan</string>
+    <string name="control_volume_label">Volume Media</string>
+    <string name="control_brightness_label">Kecerahan</string>
+    <string name="control_brightness_permission">Izinkan ubah pengaturan sistem untuk mengatur kecerahan langsung.</string>
+    <string name="control_brightness_grant">Izinkan Akses Kecerahan</string>
+    <string name="control_media_prev">Lagu Sebelumnya</string>
+    <string name="control_media_play_pause">Putar atau Jeda</string>
+    <string name="control_media_next">Lagu Berikutnya</string>
+
+    <!-- Biometric App Lock (UC-12) -->
+    <string name="biometric_prompt_title">Buka %1$s</string>
+    <string name="biometric_prompt_subtitle">Verifikasi identitas Anda untuk membuka aplikasi terkunci</string>
+    <string name="biometric_unavailable_notice">Atur kunci layar PIN atau sidik jari di Pengaturan Android terlebih dahulu.</string>
+
+    <!-- Pin Request Activity (section 8.3 & 11.3) -->
+    <string name="pin_request_title">Tambahkan pintasan ke Layar Utama?</string>
+    <string name="pin_request_body">Konfirmasi penempatan \"%1$s\" di layar utama Aurora Anda.</string>
+    <string name="pin_request_accept">Tambahkan</string>
+    <string name="pin_request_invalid">Permintaan pintasan tidak valid ditolak.</string>
+
+    <!-- Settings (Appendix B) -->
+    <string name="settings_title">Pengaturan Launcher</string>
+    <string name="settings_group_appearance">Tampilan &amp; Wallpaper</string>
+    <string name="settings_theme_label">Tema Warna</string>
+    <string name="settings_theme_system">Sistem</string>
+    <string name="settings_theme_light">Terang</string>
+    <string name="settings_theme_dark">Gelap</string>
+    <string name="settings_glass_label">Intensitas Permukaan Kaca</string>
+    <string name="settings_glass_auto">Otomatis</string>
+    <string name="settings_glass_off">Padat</string>
+    <string name="settings_glass_low">Rendah</string>
+    <string name="settings_glass_medium">Sedang</string>
+    <string name="settings_glass_high">Tinggi</string>
+    <string name="settings_active_tier">Tingkat efek aktif: %1$s</string>
+    <string name="settings_wallpaper_label">Wallpaper Layar Utama</string>
+    <string name="settings_wallpaper_borealis">Senja Borealis</string>
+    <string name="settings_wallpaper_ivory">Kabut Gading</string>
+    <string name="settings_wallpaper_slate">Ufuk Sabak</string>
+    <string name="settings_wallpaper_pick_photo">Pilih Foto Sendiri</string>
+
+    <string name="settings_group_grid">Grid &amp; Dock</string>
+    <string name="settings_grid_preset_label">Ukuran Grid Layar Utama</string>
+    <string name="settings_grid_reflow_done">Grid diubah ke %1$s. Tata letak sebelumnya disimpan ke snapshot.</string>
+    <string name="settings_grid_adaptive_tablet">Grid adaptif 6x5 pada tablet dan layar lebar</string>
+    <string name="settings_icon_size_label">Ukuran Ikon (%1$d dp)</string>
+    <string name="settings_show_labels">Tampilkan Label Aplikasi</string>
+    <string name="settings_dock_slots_label">Kapasitas Dock (%1$d slot)</string>
+
+    <string name="settings_group_icons">Ikon &amp; Paket Ikon</string>
+    <string name="settings_icon_shape_label">Bentuk Masker Ikon</string>
+    <string name="settings_shape_squircle">Squircle</string>
+    <string name="settings_shape_circle">Bulat</string>
+    <string name="settings_shape_rounded">Persegi Bulat</string>
+    <string name="settings_monochrome_icons">Ikon Bertema Monokrom</string>
+    <string name="settings_icon_pack_label">Paket Ikon</string>
+    <string name="settings_icon_pack_none">Ikon Bawaan Sistem</string>
+
+    <string name="settings_group_gestures">Gestur &amp; Pencarian</string>
+    <string name="settings_swipe_down_spotlight">Geser turun di layar utama untuk Spotlight</string>
+    <string name="settings_top_right_control">Geser turun dari kanan atas untuk Kontrol Cepat</string>
+    <string name="settings_show_app_library">Tampilkan App Library di halaman paling kanan</string>
+    <string name="settings_search_history">Simpan riwayat pencarian Spotlight (maks 50)</string>
+    <string name="settings_search_settings">Sertakan pengaturan sistem Android di Spotlight</string>
+    <string name="settings_search_contacts">Sertakan kontak perangkat di Spotlight (opsional)</string>
+
+    <string name="settings_group_privacy">Privasi &amp; Keamanan Aplikasi</string>
+    <string name="settings_badges_toggle">Lencana Angka Notifikasi</string>
+    <string name="settings_badges_subtitle">Menghitung jumlah per paket di memori saja. Isi pesan tidak pernah dibaca atau disimpan.</string>
+    <string name="settings_badges_grant_cta">Atur Izin Akses Notifikasi</string>
+    <string name="settings_biometric_toggle">Kunci Aplikasi Biometrik &amp; PIN</string>
+    <string name="settings_biometric_subtitle">Meminta verifikasi sebelum membuka aplikasi terkunci dari Aurora. Mengganti launcher utama akan melewati kunci tingkat launcher.</string>
+    <string name="settings_hidden_apps_cta">Kelola Aplikasi Tersembunyi (%1$d disembunyikan)</string>
+    <string name="settings_hidden_apps_title">Aplikasi Tersembunyi</string>
+    <string name="settings_hidden_apps_empty">Belum ada aplikasi tersembunyi. Tekan lama ikon di layar utama atau App Library untuk menyembunyikannya.</string>
+    <string name="settings_unhide_action">Pulihkan</string>
+    <string name="settings_wipe_data_cta">Hapus Semua Data Lokal</string>
+    <string name="settings_wipe_confirm_title">Hapus seluruh data lokal launcher?</string>
+    <string name="settings_wipe_confirm_body">Tindakan ini menghapus permanen seluruh halaman ruang kerja, folder, snapshot, riwayat pencarian, dan preferensi Anda.</string>
+
+    <string name="settings_group_backup">Cadangan, Pemulihan &amp; Launcher Utama</string>
+    <string name="settings_export_backup">Ekspor Cadangan Tata Letak (JSON)</string>
+    <string name="settings_import_backup">Impor Cadangan Tata Letak (JSON)</string>
+    <string name="settings_backup_exported">Cadangan berhasil disimpan.</string>
+    <string name="settings_backup_imported">Berhasil memulihkan %1$d item ruang kerja.</string>
+    <string name="settings_backup_failed">File cadangan ditolak: %1$s</string>
+    <string name="settings_snapshots_label">Snapshot Otomatis Terakhir</string>
+    <string name="settings_snapshots_empty">Snapshot dibuat otomatis sebelum perubahan grid dan tata letak.</string>
+    <string name="settings_restore_snapshot">Pulihkan</string>
+    <string name="settings_switch_launcher">Ganti Aplikasi Launcher Utama</string>
+    <string name="settings_switch_launcher_sub">Buka pengaturan Aplikasi Default Android untuk beralih kembali kapan saja.</string>
+
+    <string name="settings_group_advanced">Performa &amp; Aksesibilitas</string>
+    <string name="settings_force_light_mode">Mode Ringan (nonaktifkan shader blur)</string>
+    <string name="settings_reduce_motion">Kurangi Gerakan &amp; Animasi Goyangan</string>
+    <string name="settings_oem_battery_tip">Bila ponsel sering memuat ulang layar utama di latar belakang, atur Penggunaan Baterai Aurora ke Tidak Dibatasi di Info Aplikasi.</string>
+
+    <string name="settings_group_about">Tentang &amp; Lisensi</string>
+    <string name="settings_version_label">Aurora Launcher v%1$s</string>
+    <string name="settings_privacy_policy_cta">Lihat Kebijakan Privasi</string>
+    <string name="settings_privacy_policy_body">Aurora Launcher memproses daftar aplikasi terpasang, tata letak, hitungan buka lokal, dan lencana notifikasi opsional sepenuhnya di dalam perangkat Anda. Tidak ada analitik jaringan, SDK iklan, atau server eksternal.</string>
+    <string name="settings_licenses_cta">Lisensi Sumber Terbuka</string>
+    <string name="settings_licenses_body">Dibangun menggunakan Jetpack Compose, AndroidX Room, DataStore, Lifecycle, Window, Biometric, Hilt, Kotlinx Coroutines, Kotlinx Serialization, dan Coil 3 di bawah Apache License 2.0.</string>
+    <string name="settings_copy_diagnostics">Salin Info Diagnostik Non-Sensitif</string>
+    <string name="settings_diagnostics_copied">Model perangkat, versi Android, dan tingkat efek aktif disalin ke papan klip.</string>
+</resources>

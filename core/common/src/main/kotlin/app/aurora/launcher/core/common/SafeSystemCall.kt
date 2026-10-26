@@ -16,7 +16,7 @@ sealed interface SystemResult<out T> {
  * Concentrates Android IPC and PackageManager exception guards at the platform boundary.
  */
 inline fun <T> safeSystemCall(
-    operationName: String,
+    operationName: String = "systemCall",
     block: () -> T,
 ): SystemResult<T> {
     return try {
@@ -31,7 +31,7 @@ inline fun <T> safeSystemCall(
         SystemResult.Failure("$operationName target package missing", e)
     } catch (e: IllegalStateException) {
         SystemResult.Failure("$operationName invalid system state", e)
-    } catch (e: RuntimeException) {
-        SystemResult.Failure("$operationName unexpected runtime error", e)
+    } catch (e: Exception) {
+        SystemResult.Failure(e.message ?: "$operationName failed", e)
     }
 }
