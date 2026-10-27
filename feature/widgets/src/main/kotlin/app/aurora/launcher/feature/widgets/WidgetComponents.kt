@@ -5,6 +5,11 @@ import android.graphics.Bitmap
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -66,6 +71,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
@@ -693,8 +699,26 @@ fun WidgetHostSlot(
     val expandH = stringResource(R.string.widgets_resize_larger_h)
     val removeLabel = stringResource(R.string.action_remove)
 
+    val reduceMotion = AuroraTheme.reduceMotion
+    val rotationDeg = if (isEditMode && !reduceMotion) {
+        val transition = rememberInfiniteTransition(label = "widgetJiggle")
+        val anim by transition.animateFloat(
+            initialValue = -0.7f,
+            targetValue = 0.7f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 150),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "widgetDeg",
+        )
+        anim
+    } else {
+        0f
+    }
+
     Box(
         modifier = modifier
+            .graphicsLayer { rotationZ = rotationDeg }
             .clip(cardShape)
             .semantics {
                 customActions = buildList {

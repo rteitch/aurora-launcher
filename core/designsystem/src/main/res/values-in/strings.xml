@@ -81,6 +81,7 @@
     <string name="folder_rename_label">Nama folder</string>
     <string name="folder_rename_action">Ubah Nama Folder</string>
     <string name="folder_remove_item">Keluarkan dari Folder</string>
+    <string name="folder_child_action_desc">Keluarkan %1$s dari folder ini dan tempatkan kembali di layar utama?</string>
     <string name="folder_item_count">%1$d aplikasi</string>
 
     <!-- App Library (UC-07) -->

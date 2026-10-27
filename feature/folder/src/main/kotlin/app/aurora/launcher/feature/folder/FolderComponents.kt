@@ -43,10 +43,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -69,6 +71,7 @@ import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -262,6 +265,7 @@ fun FolderOverlayModal(
         var draftTitle by rememberSaveable(activeFolder.id.value, activeFolder.title) {
             mutableStateOf(activeFolder.title.ifBlank { fallbackTitle })
         }
+        var selectedChildForAction by remember { mutableStateOf<WorkspaceItem.App?>(null) }
 
         Box(
             contentAlignment = Alignment.Center,
@@ -417,11 +421,55 @@ fun FolderOverlayModal(
                                     },
                                 ),
                                 onClick = { onAppClick(child.component) },
-                                onLongClick = { onRemoveChildFromFolder(child.id) },
+                                onLongClick = { selectedChildForAction = child },
                             )
                         }
                     }
                 }
+            }
+
+            val actionTarget = selectedChildForAction
+            if (actionTarget != null) {
+                val entry = catalogByKey[actionTarget.component]
+                val label = entry?.label ?: actionTarget.component.packageName
+                AlertDialog(
+                    onDismissRequest = { selectedChildForAction = null },
+                    title = {
+                        Text(
+                            text = label,
+                            style = AuroraTypography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = palette.onSurface,
+                        )
+                    },
+                    text = {
+                        Text(
+                            text = stringResource(R.string.folder_child_action_desc, label),
+                            style = AuroraTypography.bodyMedium,
+                            color = palette.onSurfaceSecondary,
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                val targetChild = actionTarget
+                                selectedChildForAction = null
+                                onRemoveChildFromFolder(targetChild.id)
+                            },
+                        ) {
+                            Text(
+                                text = stringResource(R.string.folder_remove_item),
+                                color = palette.accent,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { selectedChildForAction = null }) {
+                            Text(stringResource(R.string.action_cancel))
+                        }
+                    },
+                )
             }
         }
     }

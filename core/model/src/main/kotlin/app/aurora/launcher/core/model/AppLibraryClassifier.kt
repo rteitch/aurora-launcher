@@ -146,6 +146,36 @@ object AppLibraryClassifier {
         }
     }
 
+    fun suggestFolderGroup(
+        firstPackage: String,
+        secondPackage: String,
+        firstCategory: Int? = null,
+        secondCategory: Int? = null,
+    ): LibraryGroup? {
+        val group1 = classify(firstPackage, systemCategory = firstCategory)
+        val group2 = classify(secondPackage, systemCategory = secondCategory)
+        val validGroups = setOf(
+            LibraryGroup.SOCIAL,
+            LibraryGroup.PRODUCTIVITY_FINANCE,
+            LibraryGroup.ENTERTAINMENT,
+            LibraryGroup.PHOTO_VIDEO,
+            LibraryGroup.UTILITIES,
+            LibraryGroup.GAMES,
+            LibraryGroup.SHOPPING,
+            LibraryGroup.TRAVEL,
+        )
+        if (group1 == group2 && group1 in validGroups) {
+            return group1
+        }
+        if (group1 in validGroups && group2 !in validGroups) {
+            return group1
+        }
+        if (group2 in validGroups && group1 !in validGroups) {
+            return group2
+        }
+        return null
+    }
+
     /**
      * Normalizes Unicode diacritics and leading punctuation/emoji so app lists sort and group reliably (E33).
      */

@@ -1,6 +1,7 @@
 package app.aurora.launcher.feature.home
 
 import android.app.SearchManager
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.AlarmClock
@@ -138,6 +139,8 @@ import app.aurora.launcher.core.designsystem.GlassSurface
 import app.aurora.launcher.core.data.usecase.LaunchTarget
 import app.aurora.launcher.core.designsystem.R
 import app.aurora.launcher.core.designsystem.SquircleShape
+import app.aurora.launcher.core.model.AppEntry
+import app.aurora.launcher.core.model.AppLibraryClassifier
 import app.aurora.launcher.core.model.ComponentKey
 import app.aurora.launcher.core.model.ContainerPlacement
 import app.aurora.launcher.core.model.DropTarget
@@ -146,6 +149,7 @@ import app.aurora.launcher.core.model.GridOccupancyEngine
 import app.aurora.launcher.core.model.HomeUiMode
 import app.aurora.launcher.core.model.ItemId
 import app.aurora.launcher.core.model.LeafPlacement
+import app.aurora.launcher.core.model.LibraryGroup
 import app.aurora.launcher.core.model.PageId
 import app.aurora.launcher.core.model.SwipeUpAction
 import app.aurora.launcher.core.model.WorkspaceItem
@@ -319,6 +323,7 @@ fun HomeScreen(
     }
 
     val defaultFolderTitle = stringResource(R.string.folder_default_name)
+    val context = LocalContext.current
     val orphanNotice = stringResource(R.string.home_orphan_placeholder_notice)
     val addedNotice = stringResource(R.string.home_grid_added_notice)
     val fullNotice = stringResource(R.string.home_grid_full_notice)
@@ -749,10 +754,22 @@ fun HomeScreen(
                                                     }
 
                                                     if (target != null) {
+                                                        val effectiveFolderTitle = if (target is DropTarget.HoverItem) {
+                                                            resolveSmartFolderTitle(
+                                                                draggedId = item.id,
+                                                                hoverTargetId = target.targetItemId,
+                                                                workspace = state.workspace,
+                                                                catalogByKey = state.catalogByKey,
+                                                                fallbackTitle = defaultFolderTitle,
+                                                                context = context,
+                                                            )
+                                                        } else {
+                                                            defaultFolderTitle
+                                                        }
                                                         viewModel.completeDrop(
                                                             draggedItemId = item.id,
                                                             target = target,
-                                                            defaultFolderTitle = defaultFolderTitle,
+                                                            defaultFolderTitle = effectiveFolderTitle,
                                                             onRejected = {
                                                                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                                             },
@@ -1105,10 +1122,22 @@ fun HomeScreen(
                                                 }
 
                                                 if (target != null) {
+                                                    val effectiveFolderTitle = if (target is DropTarget.HoverItem) {
+                                                        resolveSmartFolderTitle(
+                                                            draggedId = dockItem.id,
+                                                            hoverTargetId = target.targetItemId,
+                                                            workspace = state.workspace,
+                                                            catalogByKey = state.catalogByKey,
+                                                            fallbackTitle = defaultFolderTitle,
+                                                            context = context,
+                                                        )
+                                                    } else {
+                                                        defaultFolderTitle
+                                                    }
                                                     viewModel.completeDrop(
                                                         draggedItemId = dockItem.id,
                                                         target = target,
-                                                        defaultFolderTitle = defaultFolderTitle,
+                                                        defaultFolderTitle = effectiveFolderTitle,
                                                         onRejected = {
                                                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                                         },
@@ -2301,5 +2330,35 @@ private fun PageManagementOverlay(
                 }
             },
         )
+    }
+}
+
+private fun resolveSmartFolderTitle(
+    draggedId: ItemId,
+    hoverTargetId: ItemId,
+    workspace: app.aurora.launcher.core.model.WorkspaceSnapshot,
+    catalogByKey: Map<ComponentKey, AppEntry>,
+    fallbackTitle: String,
+    context: Context,
+): String {
+    val allItems = workspace.pages.flatMap { it.items } + workspace.dockItems
+    val draggedApp = allItems.firstOrNull { it.id == draggedId } as? WorkspaceItem.App ?: return fallbackTitle
+    val hoverApp = allItems.firstOrNull { it.id == hoverTargetId } as? WorkspaceItem.App ?: return fallbackTitle
+    val group = AppLibraryClassifier.suggestFolderGroup(
+        firstPackage = draggedApp.component.packageName,
+        secondPackage = hoverApp.component.packageName,
+        firstCategory = catalogByKey[draggedApp.component]?.systemCategory,
+        secondCategory = catalogByKey[hoverApp.component]?.systemCategory,
+    ) ?: return fallbackTitle
+    return when (group) {
+        LibraryGroup.SOCIAL -> context.getString(R.string.library_group_social)
+        LibraryGroup.PRODUCTIVITY_FINANCE -> context.getString(R.string.library_group_productivity)
+        LibraryGroup.ENTERTAINMENT -> context.getString(R.string.library_group_entertainment)
+        LibraryGroup.PHOTO_VIDEO -> context.getString(R.string.library_group_photo_video)
+        LibraryGroup.UTILITIES -> context.getString(R.string.library_group_utilities)
+        LibraryGroup.GAMES -> context.getString(R.string.library_group_games)
+        LibraryGroup.SHOPPING -> context.getString(R.string.library_group_shopping)
+        LibraryGroup.TRAVEL -> context.getString(R.string.library_group_travel)
+        else -> fallbackTitle
     }
 }

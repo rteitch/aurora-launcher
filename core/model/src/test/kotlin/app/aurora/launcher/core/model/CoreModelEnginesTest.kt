@@ -306,4 +306,37 @@ class CoreModelEnginesTest {
         assertEquals(1 to 0, positions[ItemId(2L)])
         assertEquals(2 to 0, positions[ItemId(3L)])
     }
+
+    @Test
+    fun `suggestFolderGroup suggests SOCIAL for matching social apps and GAMES for game apps`() {
+        val social = AppLibraryClassifier.suggestFolderGroup(
+            firstPackage = "com.whatsapp",
+            secondPackage = "org.telegram.messenger",
+        )
+        assertEquals(LibraryGroup.SOCIAL, social)
+
+        val game = AppLibraryClassifier.suggestFolderGroup(
+            firstPackage = "com.supercell.clashofclans",
+            secondPackage = "com.roblox.client",
+        )
+        assertEquals(LibraryGroup.GAMES, game)
+
+        val productivity = AppLibraryClassifier.suggestFolderGroup(
+            firstPackage = "com.google.android.gm",
+            secondPackage = "com.google.android.keep",
+        )
+        assertEquals(LibraryGroup.PRODUCTIVITY_FINANCE, productivity)
+
+        val photo = AppLibraryClassifier.suggestFolderGroup(
+            firstPackage = "com.google.android.apps.photos",
+            secondPackage = "com.google.android.GoogleCamera",
+        )
+        assertEquals(LibraryGroup.PHOTO_VIDEO, photo)
+
+        val mixed = AppLibraryClassifier.suggestFolderGroup(
+            firstPackage = "com.whatsapp",
+            secondPackage = "com.roblox.client",
+        )
+        assertEquals(null, mixed)
+    }
 }

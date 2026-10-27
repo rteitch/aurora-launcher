@@ -81,6 +81,7 @@
     <string name="folder_rename_label">Folder name</string>
     <string name="folder_rename_action">Rename Folder</string>
     <string name="folder_remove_item">Move Out of Folder</string>
+    <string name="folder_child_action_desc">Move %1$s out of this folder and place it back onto the home screen?</string>
     <string name="folder_item_count">%1$d apps</string>
 
     <!-- App Library (UC-07) -->

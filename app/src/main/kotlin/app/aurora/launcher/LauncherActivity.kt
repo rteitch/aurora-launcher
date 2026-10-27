@@ -360,7 +360,7 @@ private fun LauncherShell(
                 runCatching {
                     @Suppress("DEPRECATION")
                     activity.packageManager.getPackageInfo(activity.packageName, 0).versionName
-                }.getOrNull() ?: "1.1.1"
+                }.getOrNull() ?: "1.2.0"
             }
 
             SettingsOverlay(
