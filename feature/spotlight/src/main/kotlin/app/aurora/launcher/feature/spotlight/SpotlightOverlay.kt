@@ -63,6 +63,8 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -229,6 +231,14 @@ fun SpotlightOverlay(
     val palette = AuroraTheme.palette
     val reduceMotion = AuroraTheme.reduceMotion
     val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+
+    val dismissWithFocusClear: () -> Unit = {
+        keyboardController?.hide()
+        focusManager.clearFocus(force = true)
+        onDismiss()
+    }
 
     val contactsPermLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
@@ -241,12 +251,14 @@ fun SpotlightOverlay(
             viewModel.refreshPermissions()
             runCatching { focusRequester.requestFocus() }
         } else {
+            keyboardController?.hide()
+            focusManager.clearFocus(force = true)
             viewModel.updateQuery("")
         }
     }
 
     if (visible) {
-        BackHandler(onBack = onDismiss)
+        BackHandler(onBack = dismissWithFocusClear)
     }
 
     AnimatedVisibility(
@@ -263,7 +275,7 @@ fun SpotlightOverlay(
                 .imePadding()
                 .onPreviewKeyEvent { ev ->
                     if (ev.type == KeyEventType.KeyUp && ev.key == Key.Escape) {
-                        onDismiss()
+                        dismissWithFocusClear()
                         true
                     } else {
                         false
@@ -272,7 +284,7 @@ fun SpotlightOverlay(
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
-                    onClick = onDismiss,
+                    onClick = dismissWithFocusClear,
                 )
                 .padding(horizontal = AuroraSpacing.md, vertical = AuroraSpacing.md),
         ) {
@@ -334,7 +346,7 @@ fun SpotlightOverlay(
                                     val topApp = state.results.matchingApps.firstOrNull()
                                     if (topApp != null) {
                                         viewModel.commitQueryToHistoryIfEnabled()
-                                        onDismiss()
+                                        dismissWithFocusClear()
                                         onLaunchApp(topApp.key)
                                     }
                                 },
@@ -346,7 +358,7 @@ fun SpotlightOverlay(
                         )
 
                         IconButton(
-                            onClick = onDismiss,
+                            onClick = dismissWithFocusClear,
                             modifier = Modifier.defaultMinSize(
                                 minWidth = AuroraSpacing.minTouchTarget,
                                 minHeight = AuroraSpacing.minTouchTarget,
@@ -401,7 +413,7 @@ fun SpotlightOverlay(
                                                         profileBadge = app.profileBadge,
                                                         useWallpaperScrimForLabel = false,
                                                         onClick = {
-                                                            onDismiss()
+                                                            dismissWithFocusClear()
                                                             onLaunchApp(app.key)
                                                         },
                                                         modifier = Modifier.weight(1f),
@@ -524,7 +536,7 @@ fun SpotlightOverlay(
                                             .auroraFocusRing(RoundedCornerShape(AuroraRadii.input))
                                             .clickable {
                                                 viewModel.commitQueryToHistoryIfEnabled()
-                                                onDismiss()
+                                                dismissWithFocusClear()
                                                 onLaunchApp(app.key)
                                             }
                                             .padding(horizontal = AuroraSpacing.sm, vertical = AuroraSpacing.xs),
@@ -543,7 +555,7 @@ fun SpotlightOverlay(
                                             useWallpaperScrimForLabel = false,
                                             onClick = {
                                                 viewModel.commitQueryToHistoryIfEnabled()
-                                                onDismiss()
+                                                dismissWithFocusClear()
                                                 onLaunchApp(app.key)
                                             },
                                         )
@@ -578,7 +590,7 @@ fun SpotlightOverlay(
                                             .clickable {
                                                 viewModel.commitQueryToHistoryIfEnabled()
                                                 viewModel.openSettingAction(setting.subtitle)
-                                                onDismiss()
+                                                dismissWithFocusClear()
                                             }
                                             .padding(horizontal = AuroraSpacing.sm, vertical = AuroraSpacing.xs),
                                     ) {
@@ -624,7 +636,7 @@ fun SpotlightOverlay(
                                             .clickable {
                                                 viewModel.commitQueryToHistoryIfEnabled()
                                                 viewModel.openContact(contact.lookupUri)
-                                                onDismiss()
+                                                dismissWithFocusClear()
                                             }
                                             .padding(horizontal = AuroraSpacing.sm, vertical = AuroraSpacing.xs),
                                     ) {

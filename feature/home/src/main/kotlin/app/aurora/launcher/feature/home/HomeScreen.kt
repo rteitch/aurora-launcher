@@ -1,8 +1,18 @@
 package app.aurora.launcher.feature.home
 
+import android.app.SearchManager
 import android.content.Intent
+import android.net.Uri
 import android.provider.AlarmClock
+import android.speech.RecognizerIntent
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -93,7 +103,9 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
@@ -193,22 +205,14 @@ fun HomeScreen(
     val scope = rememberCoroutineScope()
     val canUndo by viewModel.canUndo.collectAsStateWithLifecycle()
     val canRedo by viewModel.canRedo.collectAsStateWithLifecycle()
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
 
     val isEditMode = state.mode is HomeUiMode.EditMode
     val activeDrag = (state.mode as? HomeUiMode.EditMode)?.dragSession
     val isDragging = activeDrag != null
 
     var showPageManagement by remember { mutableStateOf(false) }
-
-    if (isEditMode) {
-        BackHandler {
-            if (showPageManagement) {
-                showPageManagement = false
-            } else {
-                viewModel.exitEditMode()
-            }
-        }
-    }
 
     val allWorkspacePages = state.workspace.pages
     val hiddenPageIds = state.settings.hiddenPageIds
@@ -224,12 +228,44 @@ fun HomeScreen(
     val totalPagerPages = workspacePages.size + if (showAppLibrary) 1 else 0
     val pagerState = rememberPagerState(initialPage = 0, pageCount = { totalPagerPages.coerceAtLeast(1) })
 
+    if (isEditMode) {
+        BackHandler {
+            if (showPageManagement) {
+                showPageManagement = false
+            } else {
+                viewModel.exitEditMode()
+            }
+        }
+    } else if (pagerState.currentPage > 0) {
+        BackHandler {
+            focusManager.clearFocus(force = true)
+            keyboardController?.hide()
+            scope.launch {
+                pagerState.animateScrollToPage(0, animationSpec = tween(320, easing = FastOutSlowInEasing))
+            }
+        }
+    }
+
+    LaunchedEffect(pagerState.currentPage) {
+        focusManager.clearFocus(force = true)
+        keyboardController?.hide()
+    }
+
+    LaunchedEffect(pagerState.isScrollInProgress) {
+        if (pagerState.isScrollInProgress) {
+            focusManager.clearFocus(force = true)
+            keyboardController?.hide()
+        }
+    }
+
     LaunchedEffect(homeButtonSignal) {
         if (homeButtonSignal > 0) {
+            focusManager.clearFocus(force = true)
+            keyboardController?.hide()
             if (isEditMode) {
                 viewModel.exitEditMode()
             } else if (pagerState.currentPage != 0) {
-                pagerState.animateScrollToPage(0)
+                pagerState.animateScrollToPage(0, animationSpec = tween(320, easing = FastOutSlowInEasing))
             }
         }
     }
@@ -375,6 +411,8 @@ fun HomeScreen(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
                             onClick = {
+                                focusManager.clearFocus(force = true)
+                                keyboardController?.hide()
                                 if (isEditMode && !isDragging) {
                                     viewModel.exitEditMode()
                                 }
@@ -1336,7 +1374,11 @@ fun HomeScreen(
         )
     }
 
-    if (showPageManagement) {
+    AnimatedVisibility(
+        visible = showPageManagement,
+        enter = fadeIn(animationSpec = tween(220)) + scaleIn(initialScale = 0.86f, animationSpec = tween(240, easing = FastOutSlowInEasing)),
+        exit = fadeOut(animationSpec = tween(180)) + scaleOut(targetScale = 0.86f, animationSpec = tween(200, easing = FastOutSlowInEasing)),
+    ) {
         PageManagementOverlay(
             pages = state.workspace.pages,
             hiddenPageIds = state.settings.hiddenPageIds,
@@ -1702,13 +1744,46 @@ private fun SmartGlanceHeader(
                 )
             }
 
+            val launchGoogleWebSearch: () -> Unit = {
+                val searchIntent = Intent(Intent.ACTION_WEB_SEARCH).apply {
+                    putExtra(SearchManager.QUERY, "")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                val launched = runCatching {
+                    context.startActivity(searchIntent)
+                    true
+                }.getOrDefault(false)
+
+                if (!launched) {
+                    val googleAppIntent = context.packageManager.getLaunchIntentForPackage("com.google.android.googlequicksearchbox")
+                    if (googleAppIntent != null) {
+                        googleAppIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        runCatching { context.startActivity(googleAppIntent) }
+                    } else {
+                        val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com")).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        runCatching { context.startActivity(browserIntent) }.onFailure { onOpenSearch() }
+                    }
+                }
+            }
+
+            val launchGoogleVoiceSearch: () -> Unit = {
+                val voiceIntent = Intent(RecognizerIntent.ACTION_WEB_SEARCH).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                runCatching { context.startActivity(voiceIntent) }.onFailure {
+                    launchGoogleWebSearch()
+                }
+            }
+
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier
                     .clip(CircleShape)
                     .background(palette.surfaceVariant)
-                    .clickable(onClick = onOpenSearch)
+                    .clickable(onClick = launchGoogleWebSearch)
                     .padding(horizontal = 12.dp, vertical = 6.dp),
             ) {
                 Icon(
@@ -1724,11 +1799,7 @@ private fun SmartGlanceHeader(
                     fontWeight = FontWeight.SemiBold,
                 )
                 IconButton(
-                    onClick = {
-                        val voiceIntent = Intent(android.speech.RecognizerIntent.ACTION_WEB_SEARCH)
-                        voiceIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        runCatching { context.startActivity(voiceIntent) }.onFailure { onOpenSearch() }
-                    },
+                    onClick = launchGoogleVoiceSearch,
                     modifier = Modifier.size(24.dp),
                 ) {
                     Icon(

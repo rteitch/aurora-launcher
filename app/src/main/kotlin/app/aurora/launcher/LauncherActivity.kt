@@ -28,6 +28,7 @@ import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.aurora.launcher.core.designsystem.AuroraLauncherTheme
 import app.aurora.launcher.core.designsystem.AuroraTheme
@@ -84,6 +85,8 @@ class LauncherActivity : AppCompatActivity() {
         setIntent(intent)
         // Validate HOME intent action before mutating navigation state (E30).
         if (intent.action == Intent.ACTION_MAIN && intent.hasCategory(Intent.CATEGORY_HOME)) {
+            val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+            insetsController.hide(WindowInsetsCompat.Type.ime())
             shellViewModel.onHomeIntentReceived()
         }
     }

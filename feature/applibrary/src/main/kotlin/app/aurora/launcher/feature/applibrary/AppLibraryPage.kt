@@ -47,6 +47,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -246,6 +248,32 @@ fun AppLibraryPage(
     var pageSelectTargetApp by remember { mutableStateOf<AppEntry?>(null) }
     var categoryPickerTarget by remember { mutableStateOf<AppEntry?>(null) }
 
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+
+    val safeLaunchApp: (ComponentKey) -> Unit = { key ->
+        keyboardController?.hide()
+        focusManager.clearFocus(force = true)
+        onLaunchApp(key)
+    }
+
+    when {
+        pageSelectTargetApp != null -> BackHandler { pageSelectTargetApp = null }
+        actionTargetApp != null -> BackHandler { actionTargetApp = null }
+        categoryPickerTarget != null -> BackHandler { categoryPickerTarget = null }
+        expandedCluster != null -> BackHandler { expandedCluster = null }
+        state.filterQuery.isNotEmpty() -> BackHandler {
+            viewModel.updateFilter("")
+            keyboardController?.hide()
+            focusManager.clearFocus(force = true)
+        }
+        showAlphabetical -> BackHandler {
+            showAlphabetical = false
+            keyboardController?.hide()
+            focusManager.clearFocus(force = true)
+        }
+    }
+
     val addedMsg = stringResource(R.string.home_grid_added_notice)
     val fullMsg = stringResource(R.string.home_grid_full_notice)
 
@@ -310,7 +338,13 @@ fun AppLibraryPage(
             },
             trailingIcon = {
                 if (state.filterQuery.isNotEmpty()) {
-                    IconButton(onClick = { viewModel.updateFilter("") }) {
+                    IconButton(
+                        onClick = {
+                            viewModel.updateFilter("")
+                            keyboardController?.hide()
+                            focusManager.clearFocus(force = true)
+                        }
+                    ) {
                         Icon(
                             imageVector = Icons.Outlined.Clear,
                             contentDescription = stringResource(R.string.action_clear),
@@ -369,7 +403,7 @@ fun AppLibraryPage(
                         apps = apps,
                         settings = state.settings,
                         iconLoader = viewModel.iconLoader,
-                        onLaunchApp = onLaunchApp,
+                        onLaunchApp = safeLaunchApp,
                         onAppLongPress = { actionTargetApp = it },
                         onExpandCluster = { expandedCluster = title to apps },
                     )
@@ -397,7 +431,7 @@ fun AppLibraryPage(
                             settings = state.settings,
                             badgeCount = badgeCounts[app.key.packageName] ?: 0,
                             iconLoader = viewModel.iconLoader,
-                            onClick = { onLaunchApp(app.key) },
+                            onClick = { safeLaunchApp(app.key) },
                             onLongClick = { actionTargetApp = app },
                         )
                     }
@@ -408,7 +442,6 @@ fun AppLibraryPage(
 
     val currentExpanded = expandedCluster
     if (currentExpanded != null) {
-        BackHandler { expandedCluster = null }
         AlertDialog(
             onDismissRequest = { expandedCluster = null },
             title = {
@@ -455,7 +488,7 @@ fun AppLibraryPage(
                             useWallpaperScrimForLabel = false,
                             onClick = {
                                 expandedCluster = null
-                                onLaunchApp(app.key)
+                                safeLaunchApp(app.key)
                             },
                             onLongClick = { actionTargetApp = app },
                         )

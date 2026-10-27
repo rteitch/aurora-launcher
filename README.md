@@ -3,9 +3,9 @@
   <h1>Aurora Launcher</h1>
   <p>A fast, zero-telemetry native Android home launcher built with Kotlin and Jetpack Compose.</p>
   <p>
-    <a href="https://github.com/rteitch/aurora-launcher/releases/download/v1.1.5/aurora-launcher-v1.1.5.apk"><strong>Download APK v1.1.5 (GitHub Release)</strong></a>
+    <a href="https://github.com/rteitch/aurora-launcher/releases/download/v1.1.6/aurora-launcher-v1.1.6.apk"><strong>Download APK v1.1.6 (GitHub Release)</strong></a>
     &nbsp;&middot;&nbsp;
-    <a href="releases/aurora-launcher-v1.1.5.apk"><strong>Repository APK Mirror</strong></a>
+    <a href="releases/aurora-launcher-v1.1.6.apk"><strong>Repository APK Mirror</strong></a>
     &nbsp;&middot;&nbsp;
     <a href="DESIGN.md"><strong>Design System</strong></a>
     &nbsp;&middot;&nbsp;
@@ -21,12 +21,12 @@ Aurora Launcher organizes installed Android apps into a calm spatial grid with c
 
 ## Release Package
 
-Download and install the signed `v1.1.5` (`versionCode = 6`) release build on any device running Android 8.0 (`API 26`) through Android 17 (`API 36+`). Both APKs are signed with a dedicated RSA-4096 release certificate using APK Signature Scheme `v2` and `v3` (measured):
+Download and install the signed `v1.1.6` (`versionCode = 7`) release build on any device running Android 8.0 (`API 26`) through Android 17 (`API 36+`). Both APKs are signed with a dedicated RSA-4096 release certificate using APK Signature Scheme `v2` and `v3` (measured):
 
 | Edition | Download Asset | Size and SHA-256 (measured) | Play Protect Sideload Compatibility |
 | :--- | :--- | :--- | :--- |
-| **Standard (`sideload`)** | [GitHub Release (`aurora-launcher-v1.1.5.apk`)](https://github.com/rteitch/aurora-launcher/releases/download/v1.1.5/aurora-launcher-v1.1.5.apk) / [Repo Mirror](releases/aurora-launcher-v1.1.5.apk) | `2.56 MB` (`2,689,564` bytes)<br />`d1a6c1198f5fc8753c8b2335e78a846ede821ae6c9206908df187e1461301561` | Recommended for browser downloads. Declares `0` `BIND_NOTIFICATION_LISTENER_SERVICE` and `0` `READ_CONTACTS` entries in manifest and `classes.dex` to pass Google Play Protect Enhanced Fraud Protection. |
-| **Full (`full`)** | [GitHub Release (`aurora-launcher-v1.1.5-full.apk`)](https://github.com/rteitch/aurora-launcher/releases/download/v1.1.5/aurora-launcher-v1.1.5-full.apk) / [Repo Mirror](releases/aurora-launcher-v1.1.5-full.apk) | `2.56 MB` (`2,689,728` bytes)<br />`4102b80ccf2c81b62f33eeac9a1013148afbb6bd803ce9f49aab3d402851dc9e` | Optional build adding opt-in Notification Count Badges and Contacts Search. Install via `adb install -r aurora-launcher-v1.1.5-full.apk` on regions enforcing Enhanced Fraud Protection. |
+| **Standard (`sideload`)** | [GitHub Release (`aurora-launcher-v1.1.6.apk`)](https://github.com/rteitch/aurora-launcher/releases/download/v1.1.6/aurora-launcher-v1.1.6.apk) / [Repo Mirror](releases/aurora-launcher-v1.1.6.apk) | `2.58 MB` (`2,705,948` bytes)<br />`fff48c112125b62b98d4197f48f74fda491c1cee175bd003e4f29f1abece033e` | Recommended for browser downloads. Declares `0` `BIND_NOTIFICATION_LISTENER_SERVICE` and `0` `READ_CONTACTS` entries in manifest and `classes.dex` to pass Google Play Protect Enhanced Fraud Protection. |
+| **Full (`full`)** | [GitHub Release (`aurora-launcher-v1.1.6-full.apk`)](https://github.com/rteitch/aurora-launcher/releases/download/v1.1.6/aurora-launcher-v1.1.6-full.apk) / [Repo Mirror](releases/aurora-launcher-v1.1.6-full.apk) | `2.58 MB` (`2,706,112` bytes)<br />`21ddbe8d71045c819511229a38c5546b164872405957270796fa726cf05f4aec` | Optional build adding opt-in Notification Count Badges and Contacts Search. Install via `adb install -r aurora-launcher-v1.1.6-full.apk` on regions enforcing Enhanced Fraud Protection. |
 
 On first installation from GitHub, Android Play Protect may show a standard unrecognized-developer prompt because the open-source signing key is distributed outside Google Play. Tap **More details** and choose **Install anyway** to finish installing. Devices upgrading from debug-signed `v1.1.0` must uninstall `v1.1.0` once before installing release-signed versions.
 
