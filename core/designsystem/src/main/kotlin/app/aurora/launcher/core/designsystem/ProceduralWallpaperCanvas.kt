@@ -6,6 +6,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -47,6 +48,11 @@ fun ProceduralWallpaperCanvas(
         }
     }
 
+    val path1 = remember { Path() }
+    val path2 = remember { Path() }
+    val path3 = remember { Path() }
+    val path4 = remember { Path() }
+
     Canvas(modifier = modifier.fillMaxSize().graphicsLayer()) {
         val w = size.width
         val h = size.height
@@ -64,29 +70,28 @@ fun ProceduralWallpaperCanvas(
                     ),
                 )
                 // Subtle northern-sky atmospheric veil
-                val ribbon = Path().apply {
-                    moveTo(0f, h * 0.28f)
-                    cubicTo(
-                        w * 0.28f,
-                        h * 0.16f,
-                        w * 0.68f,
-                        h * 0.38f,
-                        w,
-                        h * 0.22f,
-                    )
-                    lineTo(w, h * 0.56f)
-                    cubicTo(
-                        w * 0.65f,
-                        h * 0.66f,
-                        w * 0.32f,
-                        h * 0.44f,
-                        0f,
-                        h * 0.58f,
-                    )
-                    close()
-                }
+                path1.rewind()
+                path1.moveTo(0f, h * 0.28f)
+                path1.cubicTo(
+                    w * 0.28f,
+                    h * 0.16f,
+                    w * 0.68f,
+                    h * 0.38f,
+                    w,
+                    h * 0.22f,
+                )
+                path1.lineTo(w, h * 0.56f)
+                path1.cubicTo(
+                    w * 0.65f,
+                    h * 0.66f,
+                    w * 0.32f,
+                    h * 0.44f,
+                    0f,
+                    h * 0.58f,
+                )
+                path1.close()
                 drawPath(
-                    path = ribbon,
+                    path = path1,
                     brush = Brush.verticalGradient(
                         colors = listOf(
                             Color(0x001D6B8C),
@@ -141,15 +146,14 @@ fun ProceduralWallpaperCanvas(
                         ),
                     ),
                 )
-                val ridge = Path().apply {
-                    moveTo(0f, h * 0.72f)
-                    quadraticTo(w * 0.42f, h * 0.64f, w, h * 0.75f)
-                    lineTo(w, h)
-                    lineTo(0f, h)
-                    close()
-                }
+                path1.rewind()
+                path1.moveTo(0f, h * 0.72f)
+                path1.quadraticTo(w * 0.42f, h * 0.64f, w, h * 0.75f)
+                path1.lineTo(w, h)
+                path1.lineTo(0f, h)
+                path1.close()
                 drawPath(
-                    path = ridge,
+                    path = path1,
                     color = Color(0x550C1118),
                 )
             }
@@ -165,41 +169,20 @@ fun ProceduralWallpaperCanvas(
                         ),
                     ),
                 )
-                // Ambient chromatic glows
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(Color(0x356366F1), Color.Transparent),
-                        center = Offset(w * 0.25f, h * 0.25f),
-                        radius = w * 0.85f,
-                    ),
-                    center = Offset(w * 0.25f, h * 0.25f),
-                    radius = w * 0.85f,
-                )
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(Color(0x3000D2FF), Color.Transparent),
-                        center = Offset(w * 0.80f, h * 0.65f),
-                        radius = w * 0.75f,
-                    ),
-                    center = Offset(w * 0.80f, h * 0.65f),
-                    radius = w * 0.75f,
-                )
-
-                // Fluid Ribbon 1 (Neon Violet & Royal Purple)
-                val ribbonViolet = Path().apply {
-                    moveTo(0f, h * 0.18f)
-                    cubicTo(w * 0.35f, h * 0.08f, w * 0.75f, h * 0.32f, w, h * 0.20f)
-                    lineTo(w, h * 0.46f)
-                    cubicTo(w * 0.65f, h * 0.58f, w * 0.25f, h * 0.36f, 0f, h * 0.48f)
-                    close()
-                }
+                // Restrained northern horizon ribbons (Borealis Sky & Emerald veil per DESIGN.md)
+                path1.rewind()
+                path1.moveTo(0f, h * 0.18f)
+                path1.cubicTo(w * 0.35f, h * 0.08f, w * 0.75f, h * 0.32f, w, h * 0.20f)
+                path1.lineTo(w, h * 0.46f)
+                path1.cubicTo(w * 0.65f, h * 0.58f, w * 0.25f, h * 0.36f, 0f, h * 0.48f)
+                path1.close()
                 drawPath(
-                    path = ribbonViolet,
+                    path = path1,
                     brush = Brush.verticalGradient(
                         colors = listOf(
-                            Color(0x007928CA),
-                            Color(0x607928CA),
-                            Color(0x454A00E0),
+                            Color(0x000B5C8A),
+                            Color(0x400B5C8A),
+                            Color(0x2810B981),
                             Color(0x00000000),
                         ),
                         startY = h * 0.10f,
@@ -207,21 +190,19 @@ fun ProceduralWallpaperCanvas(
                     ),
                 )
 
-                // Fluid Ribbon 2 (Electric Cyan & Spectral Teal)
-                val ribbonCyan = Path().apply {
-                    moveTo(0f, h * 0.52f)
-                    cubicTo(w * 0.30f, h * 0.38f, w * 0.70f, h * 0.62f, w, h * 0.45f)
-                    lineTo(w, h * 0.72f)
-                    cubicTo(w * 0.68f, h * 0.84f, w * 0.32f, h * 0.68f, 0f, h * 0.78f)
-                    close()
-                }
+                path2.rewind()
+                path2.moveTo(0f, h * 0.52f)
+                path2.cubicTo(w * 0.30f, h * 0.38f, w * 0.70f, h * 0.62f, w, h * 0.45f)
+                path2.lineTo(w, h * 0.72f)
+                path2.cubicTo(w * 0.68f, h * 0.84f, w * 0.32f, h * 0.68f, 0f, h * 0.78f)
+                path2.close()
                 drawPath(
-                    path = ribbonCyan,
+                    path = path2,
                     brush = Brush.verticalGradient(
                         colors = listOf(
-                            Color(0x0000D2FF),
-                            Color(0x5500D2FF),
-                            Color(0x350070F3),
+                            Color(0x005CC8FF),
+                            Color(0x355CC8FF),
+                            Color(0x200B5C8A),
                             Color(0x00000000),
                         ),
                         startY = h * 0.40f,
@@ -229,21 +210,19 @@ fun ProceduralWallpaperCanvas(
                     ),
                 )
 
-                // Fluid Ribbon 3 (Warm Amber chromatic core)
-                val ribbonAmber = Path().apply {
-                    moveTo(0f, h * 0.38f)
-                    cubicTo(w * 0.40f, h * 0.30f, w * 0.60f, h * 0.48f, w, h * 0.35f)
-                    lineTo(w, h * 0.44f)
-                    cubicTo(w * 0.60f, h * 0.54f, w * 0.40f, h * 0.38f, 0f, h * 0.45f)
-                    close()
-                }
+                path3.rewind()
+                path3.moveTo(0f, h * 0.38f)
+                path3.cubicTo(w * 0.40f, h * 0.30f, w * 0.60f, h * 0.48f, w, h * 0.35f)
+                path3.lineTo(w, h * 0.44f)
+                path3.cubicTo(w * 0.60f, h * 0.54f, w * 0.40f, h * 0.38f, 0f, h * 0.45f)
+                path3.close()
                 drawPath(
-                    path = ribbonAmber,
+                    path = path3,
                     brush = Brush.verticalGradient(
                         colors = listOf(
-                            Color(0x00FF8008),
-                            Color(0x40FF8008),
-                            Color(0x30FFC837),
+                            Color(0x001D6B8C),
+                            Color(0x281D6B8C),
+                            Color(0x18142638),
                             Color(0x00000000),
                         ),
                         startY = h * 0.30f,
@@ -263,65 +242,61 @@ fun ProceduralWallpaperCanvas(
                     ),
                 )
                 // Spectral Strata Layer 1 (Emerald & Cyan wave)
-                val wave1 = Path().apply {
-                    moveTo(0f, h * 0.40f)
-                    cubicTo(w * 0.30f, h * 0.32f, w * 0.70f, h * 0.46f, w, h * 0.38f)
-                    lineTo(w, h)
-                    lineTo(0f, h)
-                    close()
-                }
+                path1.rewind()
+                path1.moveTo(0f, h * 0.40f)
+                path1.cubicTo(w * 0.30f, h * 0.32f, w * 0.70f, h * 0.46f, w, h * 0.38f)
+                path1.lineTo(w, h)
+                path1.lineTo(0f, h)
+                path1.close()
                 drawPath(
-                    path = wave1,
+                    path = path1,
                     brush = Brush.verticalGradient(
-                        colors = listOf(Color(0x2810B981), Color(0x1806B6D4), Color(0x05080C14)),
+                        colors = listOf(Color(0x2810B981), Color(0x185CC8FF), Color(0x05080C14)),
                         startY = h * 0.35f,
                         endY = h * 0.70f,
                     ),
                 )
 
-                // Spectral Strata Layer 2 (Cyan & Indigo wave)
-                val wave2 = Path().apply {
-                    moveTo(0f, h * 0.55f)
-                    cubicTo(w * 0.35f, h * 0.65f, w * 0.65f, h * 0.48f, w, h * 0.58f)
-                    lineTo(w, h)
-                    lineTo(0f, h)
-                    close()
-                }
+                // Spectral Strata Layer 2 (Borealis Cyan & Deep Indigo wave)
+                path2.rewind()
+                path2.moveTo(0f, h * 0.55f)
+                path2.cubicTo(w * 0.35f, h * 0.65f, w * 0.65f, h * 0.48f, w, h * 0.58f)
+                path2.lineTo(w, h)
+                path2.lineTo(0f, h)
+                path2.close()
                 drawPath(
-                    path = wave2,
+                    path = path2,
                     brush = Brush.verticalGradient(
-                        colors = listOf(Color(0x3006B6D4), Color(0x256366F1), Color(0x05080C14)),
+                        colors = listOf(Color(0x255CC8FF), Color(0x180B5C8A), Color(0x05080C14)),
                         startY = h * 0.50f,
                         endY = h * 0.85f,
                     ),
                 )
 
-                // Spectral Strata Layer 3 (Rose & Violet wave)
-                val wave3 = Path().apply {
-                    moveTo(0f, h * 0.70f)
-                    cubicTo(w * 0.40f, h * 0.62f, w * 0.68f, h * 0.78f, w, h * 0.68f)
-                    lineTo(w, h)
-                    lineTo(0f, h)
-                    close()
-                }
+                // Spectral Strata Layer 3 (Nordic Twilight wave)
+                path3.rewind()
+                path3.moveTo(0f, h * 0.70f)
+                path3.cubicTo(w * 0.40f, h * 0.62f, w * 0.68f, h * 0.78f, w, h * 0.68f)
+                path3.lineTo(w, h)
+                path3.lineTo(0f, h)
+                path3.close()
                 drawPath(
-                    path = wave3,
+                    path = path3,
                     brush = Brush.verticalGradient(
-                        colors = listOf(Color(0x35F43F5E), Color(0x207C3AED), Color(0x05080C14)),
+                        colors = listOf(Color(0x2038A3B8), Color(0x15142638), Color(0x05080C14)),
                         startY = h * 0.65f,
                         endY = h,
                     ),
                 )
 
                 // Crest grounding shadow
-                val crest = Path().apply {
-                    moveTo(0f, h * 0.82f)
-                    quadraticTo(w * 0.50f, h * 0.76f, w, h * 0.84f)
-                    lineTo(w, h)
-                    lineTo(0f, h)
-                    close()
-                }
-                drawPath(path = crest, color = Color(0x60090D18))
+                path4.rewind()
+                path4.moveTo(0f, h * 0.82f)
+                path4.quadraticTo(w * 0.50f, h * 0.76f, w, h * 0.84f)
+                path4.lineTo(w, h)
+                path4.lineTo(0f, h)
+                path4.close()
+                drawPath(path = path4, color = Color(0x60090D18))
             }
         }
     }

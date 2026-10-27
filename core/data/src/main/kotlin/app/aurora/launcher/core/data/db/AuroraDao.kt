@@ -22,6 +22,9 @@ interface AuroraDao {
     @Query("DELETE FROM workspace_page")
     suspend fun deleteAllPages()
 
+    @Query("DELETE FROM workspace_page WHERE id NOT IN (:retainedIds)")
+    suspend fun deletePagesExcept(retainedIds: List<Long>)
+
     @Query("DELETE FROM workspace_page WHERE id = :pageId")
     suspend fun deletePageById(pageId: Long)
 
@@ -46,6 +49,9 @@ interface AuroraDao {
 
     @Query("DELETE FROM workspace_item")
     suspend fun deleteAllWorkspaceItems()
+
+    @Query("DELETE FROM workspace_item WHERE id NOT IN (:retainedIds)")
+    suspend fun deleteWorkspaceItemsExcept(retainedIds: List<Long>)
 
     // App entries
     @Query("SELECT * FROM app_entry ORDER BY label_sort_key ASC, package_name ASC")
@@ -115,6 +121,9 @@ interface AuroraDao {
     @Query("DELETE FROM widget_instance")
     suspend fun deleteAllWidgets()
 
+    @Query("DELETE FROM widget_instance WHERE app_widget_id NOT IN (:retainedIds)")
+    suspend fun deleteWidgetsExcept(retainedIds: List<Int>)
+
     // Shortcut pins
     @Query("SELECT * FROM shortcut_pin")
     fun observeShortcutPins(): Flow<List<ShortcutPinEntity>>
@@ -127,6 +136,9 @@ interface AuroraDao {
 
     @Query("DELETE FROM shortcut_pin")
     suspend fun deleteAllShortcuts()
+
+    @Query("DELETE FROM shortcut_pin WHERE shortcut_id NOT IN (:retainedIds)")
+    suspend fun deleteShortcutsExcept(retainedIds: List<String>)
 
     // Icon overrides
     @Query("SELECT * FROM icon_override")

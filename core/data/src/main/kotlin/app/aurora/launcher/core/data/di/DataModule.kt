@@ -41,6 +41,7 @@ object DatabaseProvidesModule {
     }
 
     @Provides
+    @Singleton
     fun provideAuroraDao(database: AuroraDatabase): AuroraDao = database.auroraDao()
 
     @Provides

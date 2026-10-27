@@ -75,6 +75,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import app.aurora.launcher.core.common.AuroraDispatchers
 import app.aurora.launcher.core.data.repository.AppCatalogRepository
 import app.aurora.launcher.core.data.repository.LauncherSettingsRepository
 import app.aurora.launcher.core.data.repository.SearchHistoryRepository
@@ -104,6 +105,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -125,10 +127,14 @@ class SpotlightViewModel @Inject constructor(
     private val searchHistoryRepository: SearchHistoryRepository,
     private val contactsAndSettingsGateway: ContactsAndSettingsSearchGateway,
     val iconLoader: IconCacheAndLoader,
+    private val dispatchers: AuroraDispatchers,
 ) : ViewModel() {
 
     private val queryFlow = MutableStateFlow("")
     private val contactsPermFlow = MutableStateFlow(contactsAndSettingsGateway.hasContactsPermission())
+    private val isContactsDeclared: Boolean by lazy {
+        contactsAndSettingsGateway.isContactsPermissionDeclaredInPackage()
+    }
 
     private val debouncedQuery = queryFlow.debounce(90L)
 
@@ -139,7 +145,7 @@ class SpotlightViewModel @Inject constructor(
         settingsRepository.settings,
         searchHistoryRepository.recentQueries,
     ) { rawQuery, effectiveQuery, apps, settings, history ->
-        val contactsSupported = contactsAndSettingsGateway.isContactsPermissionDeclaredInPackage()
+        val contactsSupported = isContactsDeclared
         val hasPerm = contactsSupported && (contactsPermFlow.value || contactsAndSettingsGateway.hasContactsPermission())
         val contacts = if (contactsSupported && settings.includeContactsInSearch && hasPerm && effectiveQuery.isNotBlank()) {
             contactsAndSettingsGateway.searchContacts(effectiveQuery).map {
@@ -181,7 +187,8 @@ class SpotlightViewModel @Inject constructor(
             isContactsSupported = contactsSupported,
             hasContactsPermission = hasPerm,
         )
-    }.stateIn(
+    }.flowOn(dispatchers.io)
+     .stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = SpotlightUiState(),

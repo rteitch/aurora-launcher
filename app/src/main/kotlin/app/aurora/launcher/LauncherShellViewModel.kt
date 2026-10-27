@@ -1,12 +1,14 @@
 package app.aurora.launcher
 
-import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.aurora.launcher.core.common.SystemResult
 import app.aurora.launcher.core.data.repository.AppCatalogRepository
 import app.aurora.launcher.core.data.repository.LauncherSettingsRepository
 import app.aurora.launcher.core.data.repository.WorkspaceRepository
+import app.aurora.launcher.core.data.usecase.LaunchAppResult
+import app.aurora.launcher.core.data.usecase.LaunchAppUseCase
+import app.aurora.launcher.core.data.usecase.LaunchTarget
 import app.aurora.launcher.core.model.AppEntry
 import app.aurora.launcher.core.model.ComponentKey
 import app.aurora.launcher.core.model.GlassTier
@@ -18,10 +20,10 @@ import app.aurora.launcher.core.model.ShellOverlay
 import app.aurora.launcher.core.model.WorkspaceItem
 import app.aurora.launcher.core.model.WorkspaceSnapshot
 import app.aurora.launcher.core.platform.AppWidgetHostManager
-import app.aurora.launcher.core.platform.BiometricAuthGateway
 import app.aurora.launcher.core.platform.HardwareEnvironmentSignals
 import app.aurora.launcher.core.platform.IconCacheAndLoader
 import app.aurora.launcher.core.platform.LauncherAppsGateway
+import app.aurora.launcher.core.platform.NotificationBadgeGateway
 import app.aurora.launcher.core.platform.NotificationBadgeStore
 import app.aurora.launcher.core.platform.RoleGateway
 import app.aurora.launcher.core.platform.WallpaperGateway
@@ -30,12 +32,19 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+data class BiometricPromptRequest(
+    val target: LaunchTarget,
+    val title: String,
+    val subtitle: String,
+)
 
 data class ShellUiState(
     val isReady: Boolean = false,
@@ -61,8 +70,9 @@ class LauncherShellViewModel @Inject constructor(
     private val launcherAppsGateway: LauncherAppsGateway,
     private val wallpaperGateway: WallpaperGateway,
     private val roleGateway: RoleGateway,
-    private val biometricAuthGateway: BiometricAuthGateway,
+    private val launchAppUseCase: LaunchAppUseCase,
     private val badgeStore: NotificationBadgeStore,
+    private val badgeGateway: NotificationBadgeGateway,
     val widgetHostManager: AppWidgetHostManager,
     val iconLoader: IconCacheAndLoader,
 ) : ViewModel() {
@@ -74,6 +84,8 @@ class LauncherShellViewModel @Inject constructor(
     private val isDefaultFlow = MutableStateFlow(roleGateway.isDefaultHomeLauncher())
     private val homeSignalFlow = MutableStateFlow(0)
     private val snackbarFlow = MutableStateFlow<String?>(null)
+    private val _biometricPromptFlow = MutableStateFlow<BiometricPromptRequest?>(null)
+    val biometricPromptFlow: StateFlow<BiometricPromptRequest?> = _biometricPromptFlow.asStateFlow()
 
     private val gridSpecFlow = combine(
         settingsRepository.settings,
@@ -166,7 +178,10 @@ class LauncherShellViewModel @Inject constructor(
     private fun syncCatalogAndWorkspace(uninstalledPackages: Set<String>) {
         viewModelScope.launch {
             val catalog = launcherAppsGateway.queryInstalledCatalog()
-            appCatalogRepository.syncInstalledApps(catalog.apps)
+            appCatalogRepository.syncInstalledApps(
+                installed = catalog.apps,
+                isPrivateSpaceLocked = catalog.isPrivateSpaceLocked,
+            )
             if (catalog.isPrivateSpaceLocked) {
                 appCatalogRepository.purgePrivateSpaceApps()
             }
@@ -183,6 +198,9 @@ class LauncherShellViewModel @Inject constructor(
     fun onActivityResumed() {
         envSignalsFlow.value = wallpaperGateway.readEnvironmentSignals()
         isDefaultFlow.value = roleGateway.isDefaultHomeLauncher()
+        if (uiState.value.settings.notificationBadgesEnabled && badgeGateway.isNotificationAccessGranted()) {
+            badgeGateway.requestRebindService()
+        }
     }
 
     fun updateTabletViewport(isTablet: Boolean) {
@@ -195,6 +213,10 @@ class LauncherShellViewModel @Inject constructor(
         } else {
             homeSignalFlow.value += 1
         }
+    }
+
+    fun onTrimMemory(level: Int) {
+        iconLoader.trimMemory(level)
     }
 
     fun buildRequestRoleIntent() = roleGateway.createRequestDefaultHomeIntent()
@@ -245,7 +267,7 @@ class LauncherShellViewModel @Inject constructor(
 
     fun removeChildFromFolder(childItemId: ItemId) {
         viewModelScope.launch {
-            workspaceRepository.removeItemFromHome(childItemId)
+            workspaceRepository.extractChildFromFolder(childItemId)
         }
     }
 
@@ -269,43 +291,70 @@ class LauncherShellViewModel @Inject constructor(
         }
     }
 
+    fun launchTarget(
+        target: LaunchTarget,
+        biometricTitle: String,
+        biometricSubtitle: String,
+        suspendedNotice: String,
+        failedNotice: String,
+    ) {
+        viewModelScope.launch {
+            when (val result = launchAppUseCase.prepareLaunch(target)) {
+                is LaunchAppResult.Success -> {
+                    if (overlayFlow.value != ShellOverlay.None) {
+                        overlayFlow.value = ShellOverlay.None
+                    }
+                }
+                is LaunchAppResult.Suspended -> {
+                    snackbarFlow.value = suspendedNotice
+                }
+                is LaunchAppResult.BiometricRequired -> {
+                    _biometricPromptFlow.value = BiometricPromptRequest(
+                        target = target,
+                        title = biometricTitle,
+                        subtitle = biometricSubtitle,
+                    )
+                }
+                is LaunchAppResult.Failed -> {
+                    snackbarFlow.value = failedNotice
+                }
+            }
+        }
+    }
+
+    fun onBiometricAuthResult(target: LaunchTarget, authenticated: Boolean, failedNotice: String) {
+        _biometricPromptFlow.value = null
+        if (authenticated) {
+            viewModelScope.launch {
+                when (launchAppUseCase.executeLaunch(target)) {
+                    is LaunchAppResult.Success -> {
+                        if (overlayFlow.value != ShellOverlay.None) {
+                            overlayFlow.value = ShellOverlay.None
+                        }
+                    }
+                    is LaunchAppResult.Failed -> {
+                        snackbarFlow.value = failedNotice
+                    }
+                    else -> Unit
+                }
+            }
+        }
+    }
+
     fun launchAppWithGate(
-        activity: FragmentActivity,
         key: ComponentKey,
         biometricTitle: String,
         biometricSubtitle: String,
         suspendedNotice: String,
         failedNotice: String,
     ) {
-        val state = uiState.value
-        val entry = state.catalogByKey[key]
-        if (entry != null && (entry.isSuspended || entry.isQuietModePaused)) {
-            snackbarFlow.value = suspendedNotice
-            return
-        }
-
-        viewModelScope.launch {
-            if (state.settings.biometricAppLockEnabled && entry?.isLocked == true) {
-                val verified = biometricAuthGateway.authenticate(
-                    activity = activity,
-                    title = biometricTitle,
-                    subtitle = biometricSubtitle,
-                )
-                if (!verified) return@launch
-            }
-
-            when (launcherAppsGateway.launchActivity(key)) {
-                is SystemResult.Success -> {
-                    appCatalogRepository.recordAppLaunch(key)
-                    if (overlayFlow.value != ShellOverlay.None) {
-                        overlayFlow.value = ShellOverlay.None
-                    }
-                }
-                is SystemResult.Failure -> {
-                    snackbarFlow.value = failedNotice
-                }
-            }
-        }
+        launchTarget(
+            target = LaunchTarget.Component(key),
+            biometricTitle = biometricTitle,
+            biometricSubtitle = biometricSubtitle,
+            suspendedNotice = suspendedNotice,
+            failedNotice = failedNotice,
+        )
     }
 
     fun resolveFolderById(folderId: ItemId): WorkspaceItem.Folder? {

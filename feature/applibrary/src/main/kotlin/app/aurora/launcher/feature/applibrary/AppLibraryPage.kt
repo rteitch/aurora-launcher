@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
@@ -30,6 +31,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Clear
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -38,6 +40,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -99,6 +102,7 @@ data class AppLibraryUiState(
     val grouped: Map<LibraryGroup, List<AppEntry>> = emptyMap(),
     val alphabeticalSections: List<Pair<String, List<AppEntry>>> = emptyList(),
     val filterQuery: String = "",
+    val isPrivateSpaceLocked: Boolean = false,
     val settings: LauncherSettings = LauncherSettings(),
 )
 
@@ -113,11 +117,20 @@ class AppLibraryViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val filterFlow = MutableStateFlow("")
+    private val isTabletFlow = MutableStateFlow(false)
 
-    val workspacePages: StateFlow<List<WorkspacePage>> = settingsRepository.settings.flatMapLatest { settings ->
-        val spec = settings.effectiveGridSpec(false)
+    fun setTabletViewport(isTablet: Boolean) {
+        isTabletFlow.value = isTablet
+    }
+
+    val workspacePages: StateFlow<List<WorkspacePage>> = combine(
+        settingsRepository.settings,
+        isTabletFlow,
+    ) { settings, isTablet ->
+        val spec = settings.effectiveGridSpec(isTablet)
         workspaceRepository.observeWorkspace(flowOf(spec))
-    }.map { it.pages }
+    }.flatMapLatest { it }
+     .map { it.pages }
      .stateIn(
          scope = viewModelScope,
          started = SharingStarted.WhileSubscribed(5_000),
@@ -130,7 +143,18 @@ class AppLibraryViewModel @Inject constructor(
         appCatalogRepository.frequentlyUsedApps,
         settingsRepository.settings,
         filterFlow,
-    ) { allApps, recent, frequent, settings, filter ->
+        appCatalogRepository.isPrivateSpaceLocked,
+    ) { args: Array<Any?> ->
+        @Suppress("UNCHECKED_CAST")
+        val allApps = args[0] as List<AppEntry>
+        @Suppress("UNCHECKED_CAST")
+        val recent = args[1] as List<AppEntry>
+        @Suppress("UNCHECKED_CAST")
+        val frequent = args[2] as List<AppEntry>
+        val settings = args[3] as LauncherSettings
+        val filter = args[4] as String
+        val isPrivateLocked = args[5] as Boolean
+
         val visible = allApps.filter { !it.isHidden }
         val filtered = if (filter.isBlank()) {
             visible
@@ -156,6 +180,7 @@ class AppLibraryViewModel @Inject constructor(
             grouped = grouped,
             alphabeticalSections = alphaSections,
             filterQuery = filter,
+            isPrivateSpaceLocked = isPrivateLocked,
             settings = settings,
         )
     }.stateIn(
@@ -163,6 +188,10 @@ class AppLibraryViewModel @Inject constructor(
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = AppLibraryUiState(),
     )
+
+    fun unlockPrivateSpace(): Boolean {
+        return launcherAppsGateway.requestUnlockPrivateSpace()
+    }
 
     fun updateFilter(query: String) {
         filterFlow.value = query
@@ -241,6 +270,10 @@ fun AppLibraryPage(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val workspacePages by viewModel.workspacePages.collectAsStateWithLifecycle()
     val palette = AuroraTheme.palette
+
+    LaunchedEffect(isTabletViewport) {
+        viewModel.setTabletViewport(isTabletViewport)
+    }
 
     var showAlphabetical by rememberSaveable { mutableStateOf(false) }
     var expandedCluster by remember { mutableStateOf<Pair<String, List<AppEntry>>?>(null) }
@@ -408,6 +441,40 @@ fun AppLibraryPage(
                         onExpandCluster = { expandedCluster = title to apps },
                     )
                 }
+
+                if (state.isPrivateSpaceLocked) {
+                    item(span = { GridItemSpan(maxLineSpan) }, key = "private_space_card") {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(AuroraSpacing.md),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(AuroraRadii.card))
+                                .background(palette.surfaceVariant)
+                                .clickable { viewModel.unlockPrivateSpace() }
+                                .padding(AuroraSpacing.md),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Lock,
+                                contentDescription = null,
+                                tint = palette.accent,
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = stringResource(R.string.private_space_locked_title),
+                                    style = AuroraTypography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = palette.onSurface,
+                                )
+                                Text(
+                                    text = stringResource(R.string.private_space_locked_desc),
+                                    style = AuroraTypography.bodyMedium,
+                                    color = palette.onSurfaceSecondary,
+                                )
+                            }
+                        }
+                    }
+                }
             }
         } else {
             LazyColumn(
@@ -434,6 +501,40 @@ fun AppLibraryPage(
                             onClick = { safeLaunchApp(app.key) },
                             onLongClick = { actionTargetApp = app },
                         )
+                    }
+                }
+
+                if (state.isPrivateSpaceLocked) {
+                    item(key = "private_space_card_alpha") {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(AuroraSpacing.md),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(AuroraRadii.card))
+                                .background(palette.surfaceVariant)
+                                .clickable { viewModel.unlockPrivateSpace() }
+                                .padding(AuroraSpacing.md),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Lock,
+                                contentDescription = null,
+                                tint = palette.accent,
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = stringResource(R.string.private_space_locked_title),
+                                    style = AuroraTypography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = palette.onSurface,
+                                )
+                                Text(
+                                    text = stringResource(R.string.private_space_locked_desc),
+                                    style = AuroraTypography.bodyMedium,
+                                    color = palette.onSurfaceSecondary,
+                                )
+                            }
+                        }
                     }
                 }
             }

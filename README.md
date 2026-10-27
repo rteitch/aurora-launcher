@@ -3,9 +3,9 @@
   <h1>Aurora Launcher</h1>
   <p>A fast, zero-telemetry native Android home launcher built with Kotlin and Jetpack Compose.</p>
   <p>
-    <a href="https://github.com/rteitch/aurora-launcher/releases/download/v1.1.6/aurora-launcher-v1.1.6.apk"><strong>Download APK v1.1.6 (GitHub Release)</strong></a>
+    <a href="https://github.com/rteitch/aurora-launcher/releases/download/v1.2.0/aurora-launcher-v1.2.0.apk"><strong>Download APK v1.2.0 (GitHub Release)</strong></a>
     &nbsp;&middot;&nbsp;
-    <a href="releases/aurora-launcher-v1.1.6.apk"><strong>Repository APK Mirror</strong></a>
+    <a href="releases/aurora-launcher-v1.2.0.apk"><strong>Repository APK Mirror</strong></a>
     &nbsp;&middot;&nbsp;
     <a href="DESIGN.md"><strong>Design System</strong></a>
     &nbsp;&middot;&nbsp;
@@ -21,12 +21,12 @@ Aurora Launcher organizes installed Android apps into a calm spatial grid with c
 
 ## Release Package
 
-Download and install the signed `v1.1.6` (`versionCode = 7`) release build on any device running Android 8.0 (`API 26`) through Android 17 (`API 36+`). Both APKs are signed with a dedicated RSA-4096 release certificate using APK Signature Scheme `v2` and `v3` (measured):
+Download and install the signed `v1.2.0` (`versionCode = 8`) release build on any device running Android 8.0 (`API 26`) through Android 17 (`API 36+`). Both APKs are signed with a dedicated RSA-4096 release certificate using APK Signature Scheme `v2` and `v3` (measured):
 
 | Edition | Download Asset | Size and SHA-256 (measured) | Play Protect Sideload Compatibility |
 | :--- | :--- | :--- | :--- |
-| **Standard (`sideload`)** | [GitHub Release (`aurora-launcher-v1.1.6.apk`)](https://github.com/rteitch/aurora-launcher/releases/download/v1.1.6/aurora-launcher-v1.1.6.apk) / [Repo Mirror](releases/aurora-launcher-v1.1.6.apk) | `2.58 MB` (`2,705,948` bytes)<br />`fff48c112125b62b98d4197f48f74fda491c1cee175bd003e4f29f1abece033e` | Recommended for browser downloads. Declares `0` `BIND_NOTIFICATION_LISTENER_SERVICE` and `0` `READ_CONTACTS` entries in manifest and `classes.dex` to pass Google Play Protect Enhanced Fraud Protection. |
-| **Full (`full`)** | [GitHub Release (`aurora-launcher-v1.1.6-full.apk`)](https://github.com/rteitch/aurora-launcher/releases/download/v1.1.6/aurora-launcher-v1.1.6-full.apk) / [Repo Mirror](releases/aurora-launcher-v1.1.6-full.apk) | `2.58 MB` (`2,706,112` bytes)<br />`21ddbe8d71045c819511229a38c5546b164872405957270796fa726cf05f4aec` | Optional build adding opt-in Notification Count Badges and Contacts Search. Install via `adb install -r aurora-launcher-v1.1.6-full.apk` on regions enforcing Enhanced Fraud Protection. |
+| **Standard (`sideload`)** | [GitHub Release (`aurora-launcher-v1.2.0.apk`)](https://github.com/rteitch/aurora-launcher/releases/download/v1.2.0/aurora-launcher-v1.2.0.apk) / [Repo Mirror](releases/aurora-launcher-v1.2.0.apk) | `2.58 MB` (`2,706,800` bytes)<br />`0d82015b2e0e508106b6bc2e702c82d77b55214e1c2afbc534da5a1b6f664e61` | Recommended for browser downloads. Declares `0` `BIND_NOTIFICATION_LISTENER_SERVICE` and `0` `READ_CONTACTS` entries in manifest and `classes.dex` to pass Google Play Protect Enhanced Fraud Protection. |
+| **Full (`full`)** | [GitHub Release (`aurora-launcher-v1.2.0-full.apk`)](https://github.com/rteitch/aurora-launcher/releases/download/v1.2.0/aurora-launcher-v1.2.0-full.apk) / [Repo Mirror](releases/aurora-launcher-v1.2.0-full.apk) | `2.60 MB` (`2,723,352` bytes)<br />`acf2304ce879be7caf9a763bfa2037ec058b30cd798110653a057942a1975d0d` | Optional build adding opt-in Notification Count Badges and Contacts Search. Install via `adb install -r aurora-launcher-v1.2.0-full.apk` on regions enforcing Enhanced Fraud Protection. |
 
 On first installation from GitHub, Android Play Protect may show a standard unrecognized-developer prompt because the open-source signing key is distributed outside Google Play. Tap **More details** and choose **Install anyway** to finish installing. Devices upgrading from debug-signed `v1.1.0` must uninstall `v1.1.0` once before installing release-signed versions.
 
@@ -158,6 +158,16 @@ All screenshots below were captured from the running application on an Android 1
 
 ## Core Capabilities
 
+- **Google Android Architecture Recommendations Compliance.** Enforces official layered separation across data, domain, and UI tiers. Replaces full table clear-and-insert cycles with differential Room database updates to prevent unnecessary UI invalidation and disk writes (dianalisis).
+- **Centralized LaunchAppUseCase Security Gatekeeper.** Centralizes all app launches from Home, App Library, Spotlight, and Quick Actions through a unified domain use case. Enforces biometric authentication and suspended package verification before starting activities (dianalisis).
+- **Low-RAM Cache Eviction (onTrimMemory).** Hooks into `ComponentCallbacks2.onTrimMemory` to evict cached icon bitmaps when system memory pressure increases. Recycles memory aggressively to prevent background process kills (dianalisis).
+- **Active Workspace Page Restoration.** Persists the active workspace page index across configuration changes and process death. Restores the exact screen position when returning to the launcher (dianalisis).
+- **Responsive AppWidget Size Options.** Injects `OPTION_APPWIDGET_MIN_WIDTH`, `OPTION_APPWIDGET_MIN_HEIGHT`, `OPTION_APPWIDGET_MAX_WIDTH`, and `OPTION_APPWIDGET_MAX_HEIGHT` bundles into widget hosts. Invokes `updateAppWidgetSize` dynamically based on desktop cell spans (dianalisis).
+- **Android 15+ Private Space Profile Drawer.** Provides dedicated Private Space lock and unlock controls in App Library. Prompts system biometric authentication to reveal or hide protected private apps (dianalisis).
+- **Edge Gesture Isolation During Drag.** Workspace edge drag zones apply dynamic 200dp `Modifier.systemGestureExclusion()` bounds. Prevents accidental Android back navigation gestures during icon reordering (dianalisis).
+- **Folder Child Extraction & Auto-Dissolution.** Moving an item out of a folder safely relocates it to the nearest available desktop slot. When a folder reaches a single remaining item, it automatically dissolves back into a clean desktop item without orphan entries (dianalisis).
+- **Resilient Notification Badge Auto-Rebind.** Automatically invokes `requestRebind` when the listener disconnects or the launcher resumes from background, keeping unread notification count badges synchronized (dianalisis).
+- **Comprehensive Automated Test Coverage.** Full unit test coverage across all 11 modules with 250 unit test cases validating use cases, repositories, viewmodels, and platform gateways (diukur).
 - **Cross-Page Drag & Drop with Edge Dwell Paging.** Holding a dragged icon within 48dp of the screen edge for 400ms automatically flips to the adjacent page with haptic feedback. Dwelling at the right edge of the last page for 550ms dynamically creates and flips to a brand-new page.
 - **Smart Glance Header Deletion & Restoration.** The primary Page 1 Smart Glance Header includes a circular red minus button during Edit Mode to delete it cleanly. The header can be restored at any time as a first-party widget from the widget gallery.
 - **Workspace Undo & Redo History.** Edit Mode features dedicated Undo and Redo toolbar buttons. Every drag-drop move, tidy reflow, widget resize, and page mutation can be stepped backward or forward with atomic workspace snapshots.
@@ -224,7 +234,7 @@ All figures below were measured on an Android 17 (`ps16k`, `16,384` byte page si
 
 | Metric | Target Budget | Measured Value | Status |
 | :--- | :--- | :--- | :--- |
-| Minified Release APK Size | `<= 15.0 MB` | `2.56 MB` (`2,689,564` bytes `sideload`, `2,689,728` bytes `full`) | Pass |
+| Minified Release APK Size | `<= 15.0 MB` | `2.58 MB` (`2,706,800` bytes `sideload`, `2,723,352` bytes `full`) | Pass |
 | Cold Start (`am start -W`, median of 5) | `< 700 ms` | `672 ms` | Pass |
 | Warm Resume (`KEYCODE_HOME`, median of 5) | `< 150 ms` | `98.5 ms` | Pass |
 | Idle Resident Memory (`dumpsys meminfo` Total PSS) | `< 110 MB` | `52.13 MB` | Pass |

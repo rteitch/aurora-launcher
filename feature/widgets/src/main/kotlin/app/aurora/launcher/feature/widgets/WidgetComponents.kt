@@ -753,6 +753,19 @@ fun WidgetHostSlot(
                 update = { view ->
                     (view as? app.aurora.launcher.core.platform.SafeAppWidgetHostView)
                         ?.setDragFrozen(isDragging || isEditMode)
+                    (view as? android.appwidget.AppWidgetHostView)?.let { hostView ->
+                        hostManager.updateWidgetSize(
+                            view = hostView,
+                            appWidgetId = widget.appWidgetId.value,
+                            spanX = widget.spanX,
+                            spanY = widget.spanY,
+                            gridSpec = gridSpec,
+                        )
+                    }
+                },
+                onRelease = { view ->
+                    (view as? app.aurora.launcher.core.platform.SafeAppWidgetHostView)
+                        ?.setDragFrozen(false)
                 },
                 modifier = Modifier.fillMaxSize(),
             )

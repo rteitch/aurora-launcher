@@ -111,4 +111,10 @@ class PlatformGatewaysTest {
         assertFalse(ContactsAndSettingsSearchGateway.isContactsSupported(setOf("android.permission.VIBRATE")))
         assertTrue(ContactsAndSettingsSearchGateway.isContactsSupported(setOf("android.permission.READ_CONTACTS")))
     }
+
+    @Test
+    fun `NotificationBadgeGateway requestRebindService returns false when context is null`() {
+        val gateway = NotificationBadgeGateway(context = null)
+        assertFalse(gateway.requestRebindService())
+    }
 }

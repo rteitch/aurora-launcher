@@ -53,45 +53,47 @@ internal object IconPackXmlParser {
     }
 }
 
-@Singleton
-class IconPackGateway @Inject constructor(
-    @ApplicationContext private val context: Context,
-    private val dispatchers: AuroraDispatchers,
+open class IconPackGateway(
+    private val context: Context? = null,
+    private val dispatchers: AuroraDispatchers? = null,
 ) {
     private val parsedPacks = ConcurrentHashMap<String, Map<String, String>>()
 
-    suspend fun discoverIconPacks(): List<IconPackCandidate> = withContext(dispatchers.io) {
-        val pm = context.packageManager
-        val actions = listOf(
-            "org.adw.launcher.THEMES",
-            "com.novalauncher.THEME",
-            "com.gau.go.launcherex.theme",
-        )
-        val discovered = LinkedHashMap<String, IconPackCandidate>()
-        for (action in actions) {
-            val resolved = safeSystemCall {
-                pm.queryIntentActivities(Intent(action), PackageManager.GET_META_DATA)
-            }.getOrNull().orEmpty()
-            for (info in resolved) {
-                val pkg = info.activityInfo?.packageName ?: continue
-                if (pkg == context.packageName || discovered.containsKey(pkg)) continue
-                val label = safeSystemCall { info.loadLabel(pm).toString() }.getOrNull() ?: pkg
-                discovered[pkg] = IconPackCandidate(packageName = pkg, label = label)
+    open suspend fun discoverIconPacks(): List<IconPackCandidate> =
+        withContext(dispatchers?.io ?: kotlinx.coroutines.Dispatchers.IO) {
+            val ctx = context ?: return@withContext emptyList()
+            val pm = ctx.packageManager
+            val actions = listOf(
+                "org.adw.launcher.THEMES",
+                "com.novalauncher.THEME",
+                "com.gau.go.launcherex.theme",
+            )
+            val discovered = LinkedHashMap<String, IconPackCandidate>()
+            for (action in actions) {
+                val resolved = safeSystemCall {
+                    pm.queryIntentActivities(Intent(action), PackageManager.GET_META_DATA)
+                }.getOrNull().orEmpty()
+                for (info in resolved) {
+                    val pkg = info.activityInfo?.packageName ?: continue
+                    if (pkg == ctx.packageName || discovered.containsKey(pkg)) continue
+                    val label = safeSystemCall { info.loadLabel(pm).toString() }.getOrNull() ?: pkg
+                    discovered[pkg] = IconPackCandidate(packageName = pkg, label = label)
+                }
             }
+            discovered.values.sortedBy { it.label.lowercase() }
         }
-        discovered.values.sortedBy { it.label.lowercase() }
-    }
 
     suspend fun loadCustomDrawable(
         packPackage: String,
         key: ComponentKey,
-    ): Drawable? = withContext(dispatchers.io) {
+    ): Drawable? = withContext(dispatchers?.io ?: kotlinx.coroutines.Dispatchers.IO) {
+        val ctx = context ?: return@withContext null
         val mapping = parsedPacks[packPackage] ?: loadPackMapping(packPackage).also {
             parsedPacks[packPackage] = it
         }
         val drawableName = mapping["${key.packageName}/${key.activityClass}"] ?: return@withContext null
         safeSystemCall {
-            val packRes: Resources = context.packageManager.getResourcesForApplication(packPackage)
+            val packRes: Resources = ctx.packageManager.getResourcesForApplication(packPackage)
             val resId = packRes.getIdentifier(drawableName, "drawable", packPackage)
             if (resId == 0) null else ResourcesCompat.getDrawable(packRes, resId, null)
         }.getOrNull()
@@ -102,8 +104,9 @@ class IconPackGateway @Inject constructor(
     }
 
     private fun loadPackMapping(packPackage: String): Map<String, String> {
+        val ctx = context ?: return emptyMap()
         return safeSystemCall {
-            val packRes = context.packageManager.getResourcesForApplication(packPackage)
+            val packRes = ctx.packageManager.getResourcesForApplication(packPackage)
             val xmlId = packRes.getIdentifier("appfilter", "xml", packPackage)
             if (xmlId != 0) {
                 packRes.getXml(xmlId).use { parser ->

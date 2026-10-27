@@ -30,6 +30,8 @@ import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import app.aurora.launcher.core.data.usecase.LaunchTarget
 import app.aurora.launcher.core.designsystem.AuroraLauncherTheme
 import app.aurora.launcher.core.designsystem.AuroraTheme
 import app.aurora.launcher.core.designsystem.ProceduralWallpaperCanvas
@@ -40,6 +42,7 @@ import app.aurora.launcher.core.model.GridSpec
 import app.aurora.launcher.core.model.ShellOverlay
 import app.aurora.launcher.core.model.WallpaperStyle
 import app.aurora.launcher.core.platform.AppWidgetHostManager
+import app.aurora.launcher.core.platform.BiometricAuthGateway
 import app.aurora.launcher.feature.applibrary.AppLibraryPage
 import app.aurora.launcher.feature.controlpanel.ControlPanelOverlay
 import app.aurora.launcher.feature.folder.FolderOverlayModal
@@ -60,6 +63,9 @@ class LauncherActivity : AppCompatActivity() {
     @Inject
     lateinit var appWidgetHostManager: AppWidgetHostManager
 
+    @Inject
+    lateinit var biometricAuthGateway: BiometricAuthGateway
+
     private val shellViewModel: LauncherShellViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -71,13 +77,9 @@ class LauncherActivity : AppCompatActivity() {
             LauncherShell(
                 activity = this,
                 viewModel = shellViewModel,
+                biometricAuthGateway = biometricAuthGateway,
             )
         }
-    }
-
-    override fun onResume() {
-        super.onResume()
-        shellViewModel.onActivityResumed()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -90,13 +92,24 @@ class LauncherActivity : AppCompatActivity() {
             shellViewModel.onHomeIntentReceived()
         }
     }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        shellViewModel.onTrimMemory(level)
+    }
 }
 
 @Composable
 private fun LauncherShell(
     activity: AppCompatActivity,
     viewModel: LauncherShellViewModel,
+    biometricAuthGateway: BiometricAuthGateway,
 ) {
+    LifecycleResumeEffect(Unit) {
+        viewModel.onActivityResumed()
+        onPauseOrDispose {}
+    }
+
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val config = LocalConfiguration.current
     val resources = LocalResources.current
@@ -127,16 +140,31 @@ private fun LauncherShell(
         viewModel.onActivityResumed()
     }
 
-    val launchHandler: (ComponentKey) -> Unit = { key ->
-        val label = state.catalogByKey[key]?.label ?: key.packageName
-        viewModel.launchAppWithGate(
+    val biometricRequest by viewModel.biometricPromptFlow.collectAsStateWithLifecycle()
+    LaunchedEffect(biometricRequest) {
+        val req = biometricRequest ?: return@LaunchedEffect
+        val authenticated = biometricAuthGateway.authenticate(
             activity = activity,
-            key = key,
+            title = req.title,
+            subtitle = req.subtitle,
+        )
+        val failedNotice = resources.getString(R.string.home_launch_failed_notice, req.target.packageName)
+        viewModel.onBiometricAuthResult(req.target, authenticated, failedNotice)
+    }
+
+    val launchTargetHandler: (LaunchTarget) -> Unit = { target ->
+        val label = state.catalogByKey.values.firstOrNull { it.key.packageName == target.packageName }?.label ?: target.packageName
+        viewModel.launchTarget(
+            target = target,
             biometricTitle = resources.getString(R.string.biometric_prompt_title, label),
             biometricSubtitle = resources.getString(R.string.biometric_prompt_subtitle),
             suspendedNotice = resources.getString(R.string.home_suspended_app_notice, label),
             failedNotice = resources.getString(R.string.home_launch_failed_notice, label),
         )
+    }
+
+    val launchHandler: (ComponentKey) -> Unit = { key ->
+        launchTargetHandler(LaunchTarget.Component(key))
     }
 
     AuroraLauncherTheme(
@@ -218,6 +246,7 @@ private fun LauncherShell(
                         }
                     },
                     onLaunchApp = launchHandler,
+                    onLaunchShortcut = launchTargetHandler,
                     onOpenFolder = viewModel::openFolder,
                     onOpenSpotlight = viewModel::openSpotlight,
                     onOpenControlPanel = viewModel::openControlPanel,

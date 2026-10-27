@@ -54,6 +54,8 @@ data class HomeUiState(
     val settings: LauncherSettings = LauncherSettings(),
     val mode: HomeUiMode = HomeUiMode.Normal,
     val quickActionsTarget: QuickActionsTarget? = null,
+    val canUndo: Boolean = false,
+    val canRedo: Boolean = false,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -151,7 +153,17 @@ class HomeViewModel @Inject constructor(
         settingsRepository.settings,
         modeFlow,
         quickActionsFlow,
-    ) { workspace, apps, settings, mode, quickActions ->
+        _canUndo,
+        _canRedo,
+    ) { args: Array<Any?> ->
+        val workspace = args[0] as WorkspaceSnapshot
+        @Suppress("UNCHECKED_CAST")
+        val apps = args[1] as List<AppEntry>
+        val settings = args[2] as LauncherSettings
+        val mode = args[3] as HomeUiMode
+        val quickActions = args[4] as? QuickActionsTarget
+        val canUndo = args[5] as Boolean
+        val canRedo = args[6] as Boolean
         HomeUiState(
             isLoading = false,
             workspace = workspace,
@@ -159,6 +171,8 @@ class HomeViewModel @Inject constructor(
             settings = settings,
             mode = mode,
             quickActionsTarget = quickActions,
+            canUndo = canUndo,
+            canRedo = canRedo,
         )
     }.stateIn(
         scope = viewModelScope,

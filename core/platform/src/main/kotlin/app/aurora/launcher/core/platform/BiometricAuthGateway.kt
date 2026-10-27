@@ -14,9 +14,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.resume
 
-@Singleton
-class BiometricAuthGateway @Inject constructor(
-    @ApplicationContext private val context: Context,
+open class BiometricAuthGateway(
+    private val context: Context? = null,
 ) {
     private val allowedAuthenticators = resolveAllowedAuthenticators(Build.VERSION.SDK_INT)
 
@@ -31,9 +30,10 @@ class BiometricAuthGateway @Inject constructor(
         }
     }
 
-    fun isAuthenticationAvailable(): Boolean {
+    open fun isAuthenticationAvailable(): Boolean {
+        val ctx = context ?: return false
         return safeSystemCall {
-            BiometricManager.from(context).canAuthenticate(allowedAuthenticators) ==
+            BiometricManager.from(ctx).canAuthenticate(allowedAuthenticators) ==
                 BiometricManager.BIOMETRIC_SUCCESS
         }.getOrNull() ?: false
     }

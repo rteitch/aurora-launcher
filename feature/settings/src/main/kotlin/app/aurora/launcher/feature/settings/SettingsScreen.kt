@@ -145,7 +145,7 @@ data class SettingsUiState(
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @ApplicationContext private val context: Context? = null,
     private val settingsRepository: LauncherSettingsRepository,
     private val appCatalogRepository: AppCatalogRepository,
     private val workspaceRepository: WorkspaceRepository,
@@ -298,8 +298,9 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             val json = backupRepository.exportBackupJson(uiState.value.settings)
             val writeRes = withContext(dispatchers.io) {
+                val ctx = context ?: return@withContext SystemResult.Failure("No context available")
                 safeSystemCall("exportBackup") {
-                    context.contentResolver.openOutputStream(uri, "wt")?.use { out ->
+                    ctx.contentResolver.openOutputStream(uri, "wt")?.use { out ->
                         out.write(json.toByteArray(Charsets.UTF_8))
                     } ?: throw IllegalStateException("Cannot open destination URI")
                 }
@@ -318,8 +319,9 @@ class SettingsViewModel @Inject constructor(
     ) {
         viewModelScope.launch {
             val rawRes = withContext(dispatchers.io) {
+                val ctx = context ?: return@withContext SystemResult.Failure("No context available")
                 safeSystemCall("importBackup") {
-                    context.contentResolver.openInputStream(uri)?.use { input ->
+                    ctx.contentResolver.openInputStream(uri)?.use { input ->
                         val maxBytes = 5 * 1024 * 1024 + 1024
                         val buffer = ByteArray(16 * 1024)
                         val out = java.io.ByteArrayOutputStream()

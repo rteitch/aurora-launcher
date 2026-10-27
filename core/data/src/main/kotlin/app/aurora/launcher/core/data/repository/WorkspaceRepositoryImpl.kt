@@ -2,6 +2,7 @@ package app.aurora.launcher.core.data.repository
 
 import android.content.Context
 import androidx.room.withTransaction
+import app.aurora.launcher.core.common.AuroraDispatchers
 import app.aurora.launcher.core.data.backup.AuroraBackupPayload
 import app.aurora.launcher.core.data.backup.BackupPageDto
 import app.aurora.launcher.core.data.backup.BackupPayloadCodec
@@ -48,13 +49,16 @@ class WorkspaceRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
     private val database: AuroraDatabase,
     private val dao: AuroraDao,
+    private val dispatchers: AuroraDispatchers,
 ) : WorkspaceRepository {
 
     private val cloudBackupFile: File
         get() = File(context.filesDir, "cloud_backup/workspace_layout.json")
 
-    private val repoScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val repoScope = CoroutineScope(SupervisorJob() + dispatchers.io)
     private val dragMutex = Mutex()
+    private val cloudSyncMutex = Mutex()
+    @Volatile private var activeGridSpec: GridSpec = GridSpec(4, 6, 4)
     private var activeDragLease: ActiveDragLease? = null
     private var pendingReconciliation: PendingReconciliation? = null
     private val syntheticIdCounter = AtomicLong(System.currentTimeMillis())
@@ -83,10 +87,15 @@ class WorkspaceRepositoryImpl @Inject constructor(
             dao.observeShortcutPins(),
             gridSpecFlow,
         ) { pages, items, widgets, shortcuts, spec ->
+            activeGridSpec = spec
             assembleSnapshot(pages, items, widgets, shortcuts, spec)
         }.onEach { snapshot ->
             if (snapshot.pages.any { it.items.isNotEmpty() } || snapshot.dockItems.isNotEmpty()) {
-                repoScope.launch { syncCloudLayoutMirror(snapshot) }
+                repoScope.launch {
+                    cloudSyncMutex.withLock {
+                        syncCloudLayoutMirror(snapshot)
+                    }
+                }
             }
         }
     }
@@ -262,7 +271,7 @@ class WorkspaceRepositoryImpl @Inject constructor(
 
     override suspend fun removeItemFromHome(itemId: ItemId): List<AppWidgetId> {
         return database.withTransaction {
-            val current = loadCurrentSnapshot(GridSpec(4, 6, 4))
+            val current = loadCurrentSnapshot(activeGridSpec)
             saveSnapshotInternal(current, reason = "Before item removal")
             val removedWidgetIds = mutableListOf<AppWidgetId>()
 
@@ -296,6 +305,86 @@ class WorkspaceRepositoryImpl @Inject constructor(
             )
             persistSnapshotInternal(GridOccupancyEngine.normalizeSnapshot(next))
             removedWidgetIds
+        }
+    }
+
+    override suspend fun extractChildFromFolder(childItemId: ItemId): Boolean {
+        return database.withTransaction {
+            val current = loadCurrentSnapshot(activeGridSpec)
+            var parentFolder: WorkspaceItem.Folder? = null
+            var targetChild: WorkspaceItem.App? = null
+            for (p in current.pages) {
+                for (item in p.items) {
+                    if (item is WorkspaceItem.Folder) {
+                        val c = item.children.firstOrNull { it.id == childItemId }
+                        if (c != null) {
+                            parentFolder = item
+                            targetChild = c
+                            break
+                        }
+                    }
+                }
+                if (parentFolder != null) break
+            }
+            if (parentFolder == null) {
+                for (item in current.dockItems) {
+                    if (item is WorkspaceItem.Folder) {
+                        val c = item.children.firstOrNull { it.id == childItemId }
+                        if (c != null) {
+                            parentFolder = item
+                            targetChild = c
+                            break
+                        }
+                    }
+                }
+            }
+            if (parentFolder == null || targetChild == null) return@withTransaction false
+
+            saveSnapshotInternal(current, reason = "Before extracting child from folder")
+
+            val extractionResult = extractItemFromSnapshot(current, childItemId) ?: return@withTransaction false
+            val extracted = extractionResult.first
+            val strippedSnapshot = extractionResult.second
+
+            val targetPageId = when (val p = parentFolder.placement) {
+                is ContainerPlacement.Desktop -> p.pageId
+                is ContainerPlacement.Dock -> strippedSnapshot.pages.firstOrNull()?.id ?: PageId(1L)
+            }
+
+            val targetPage = strippedSnapshot.pages.firstOrNull { it.id == targetPageId }
+                ?: strippedSnapshot.pages.firstOrNull()
+
+            val placedSnapshot = if (targetPage != null) {
+                val freeSlot = GridOccupancyEngine.findFirstFreeSpan(
+                    items = targetPage.items,
+                    columns = current.gridSpec.columns,
+                    rows = current.gridSpec.rows,
+                    spanX = 1,
+                    spanY = 1,
+                )
+                if (freeSlot != null) {
+                    val placedApp = (extracted as? WorkspaceItem.App ?: targetChild).copy(
+                        placement = LeafPlacement.Desktop(targetPage.id, freeSlot.first, freeSlot.second),
+                    )
+                    val updatedPages = strippedSnapshot.pages.map { p ->
+                        if (p.id == targetPage.id) p.copy(items = p.items + placedApp) else p
+                    }
+                    strippedSnapshot.copy(pages = updatedPages)
+                } else {
+                    val newPageId = PageId((strippedSnapshot.pages.maxOfOrNull { it.id.value } ?: 0L) + 1L)
+                    val placedApp = (extracted as? WorkspaceItem.App ?: targetChild).copy(
+                        placement = LeafPlacement.Desktop(newPageId, 0, 0),
+                    )
+                    val newPage = WorkspacePage(newPageId, strippedSnapshot.pages.size, listOf(placedApp))
+                    strippedSnapshot.copy(pages = strippedSnapshot.pages + newPage)
+                }
+            } else {
+                strippedSnapshot
+            }
+
+            val normalized = GridOccupancyEngine.normalizeSnapshot(placedSnapshot)
+            persistSnapshotInternal(normalized)
+            true
         }
     }
 
@@ -663,7 +752,7 @@ class WorkspaceRepositoryImpl @Inject constructor(
         nowEpochMs: Long,
     ): List<AppWidgetId> {
         return database.withTransaction {
-            val current = loadCurrentSnapshot(GridSpec(4, 6, 4))
+            val current = loadCurrentSnapshot(activeGridSpec)
             val presentPackages = presentKeys.map { it.packageName }.toSet()
             val orphanedWidgetIds = mutableListOf<AppWidgetId>()
 
@@ -767,12 +856,15 @@ class WorkspaceRepositoryImpl @Inject constructor(
         )
     }
 
+    private class PersistenceTracker {
+        val itemIds = mutableListOf<Long>()
+        val widgetIds = mutableListOf<Int>()
+        val shortcutIds = mutableListOf<String>()
+    }
+
     internal suspend fun persistSnapshotInternal(snapshot: WorkspaceSnapshot) {
         val now = System.currentTimeMillis()
-        dao.deleteAllWidgets()
-        dao.deleteAllShortcuts()
-        dao.deleteAllWorkspaceItems()
-        dao.deleteAllPages()
+        val tracker = PersistenceTracker()
 
         val pageIdMap = mutableMapOf<PageId, Long>()
         snapshot.pages.sortedBy { it.position }.forEachIndexed { idx, page ->
@@ -786,15 +878,40 @@ class WorkspaceRepositoryImpl @Inject constructor(
             pageIdMap[page.id] = insertedPageId
         }
 
+        val activePageIds = pageIdMap.values.toList()
+        if (activePageIds.isEmpty()) {
+            dao.deleteAllPages()
+        } else {
+            dao.deletePagesExcept(activePageIds)
+        }
+
         for (page in snapshot.pages) {
             val dbPageId = pageIdMap[page.id] ?: continue
             page.items.forEachIndexed { rank, item ->
-                insertDomainItem(item, container = "DESKTOP", containerId = dbPageId, fallbackRank = rank, now = now)
+                insertDomainItem(item, container = "DESKTOP", containerId = dbPageId, fallbackRank = rank, now = now, tracker = tracker)
             }
         }
 
         snapshot.dockItems.forEachIndexed { rank, item ->
-            insertDomainItem(item, container = "DOCK", containerId = null, fallbackRank = rank, now = now)
+            insertDomainItem(item, container = "DOCK", containerId = null, fallbackRank = rank, now = now, tracker = tracker)
+        }
+
+        if (tracker.itemIds.isEmpty()) {
+            dao.deleteAllWorkspaceItems()
+        } else {
+            dao.deleteWorkspaceItemsExcept(tracker.itemIds)
+        }
+
+        if (tracker.widgetIds.isEmpty()) {
+            dao.deleteAllWidgets()
+        } else {
+            dao.deleteWidgetsExcept(tracker.widgetIds)
+        }
+
+        if (tracker.shortcutIds.isEmpty()) {
+            dao.deleteAllShortcuts()
+        } else {
+            dao.deleteShortcutsExcept(tracker.shortcutIds)
         }
     }
 
@@ -804,6 +921,7 @@ class WorkspaceRepositoryImpl @Inject constructor(
         containerId: Long?,
         fallbackRank: Int,
         now: Long,
+        tracker: PersistenceTracker,
     ) {
         when (item) {
             is WorkspaceItem.App -> {
@@ -812,7 +930,7 @@ class WorkspaceRepositoryImpl @Inject constructor(
                     is LeafPlacement.Dock -> Triple(0, 0, p.rank)
                     is LeafPlacement.InFolder -> Triple(0, 0, p.rank)
                 }
-                dao.insertWorkspaceItem(
+                val rowId = dao.insertWorkspaceItem(
                     WorkspaceItemEntity(
                         id = if (item.id.value > 0L) item.id.value else 0L,
                         type = "APP",
@@ -829,6 +947,7 @@ class WorkspaceRepositoryImpl @Inject constructor(
                         updatedAt = now,
                     ),
                 )
+                tracker.itemIds.add(rowId)
             }
 
             is WorkspaceItem.PinnedShortcut -> {
@@ -853,6 +972,7 @@ class WorkspaceRepositoryImpl @Inject constructor(
                         updatedAt = now,
                     ),
                 )
+                tracker.itemIds.add(rowId)
                 dao.upsertShortcutPin(
                     ShortcutPinEntity(
                         itemId = rowId,
@@ -862,6 +982,7 @@ class WorkspaceRepositoryImpl @Inject constructor(
                         label = item.label,
                     ),
                 )
+                tracker.shortcutIds.add(item.shortcutId)
             }
 
             is WorkspaceItem.Folder -> {
@@ -883,8 +1004,9 @@ class WorkspaceRepositoryImpl @Inject constructor(
                         updatedAt = now,
                     ),
                 )
+                tracker.itemIds.add(folderRowId)
                 item.children.forEachIndexed { childIdx, child ->
-                    dao.insertWorkspaceItem(
+                    val childRowId = dao.insertWorkspaceItem(
                         WorkspaceItemEntity(
                             id = if (child.id.value > 0L) child.id.value else 0L,
                             type = "APP",
@@ -899,6 +1021,7 @@ class WorkspaceRepositoryImpl @Inject constructor(
                             updatedAt = now,
                         ),
                     )
+                    tracker.itemIds.add(childRowId)
                 }
             }
 
@@ -922,6 +1045,7 @@ class WorkspaceRepositoryImpl @Inject constructor(
                         updatedAt = now,
                     ),
                 )
+                tracker.itemIds.add(rowId)
                 dao.upsertWidgetInstance(
                     WidgetInstanceEntity(
                         appWidgetId = item.appWidgetId.value,
@@ -938,6 +1062,7 @@ class WorkspaceRepositoryImpl @Inject constructor(
                         status = item.status.name,
                     ),
                 )
+                tracker.widgetIds.add(item.appWidgetId.value)
             }
 
             is WorkspaceItem.WidgetStack -> {
@@ -956,6 +1081,7 @@ class WorkspaceRepositoryImpl @Inject constructor(
                         updatedAt = now,
                     ),
                 )
+                tracker.itemIds.add(stackRowId)
                 item.widgets.forEachIndexed { idx, w ->
                     insertDomainItem(
                         item = w.copy(spanX = item.spanX, spanY = item.spanY),
@@ -963,6 +1089,7 @@ class WorkspaceRepositoryImpl @Inject constructor(
                         containerId = stackRowId,
                         fallbackRank = idx,
                         now = now,
+                        tracker = tracker,
                     )
                 }
             }

@@ -47,8 +47,11 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -84,9 +87,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.Alignment
@@ -94,6 +99,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
+import kotlin.math.roundToInt
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -127,7 +135,9 @@ import app.aurora.launcher.core.designsystem.AuroraSpacing
 import app.aurora.launcher.core.designsystem.AuroraTheme
 import app.aurora.launcher.core.designsystem.AuroraTypography
 import app.aurora.launcher.core.designsystem.GlassSurface
+import app.aurora.launcher.core.data.usecase.LaunchTarget
 import app.aurora.launcher.core.designsystem.R
+import app.aurora.launcher.core.designsystem.SquircleShape
 import app.aurora.launcher.core.model.ComponentKey
 import app.aurora.launcher.core.model.ContainerPlacement
 import app.aurora.launcher.core.model.DropTarget
@@ -157,6 +167,7 @@ fun HomeScreen(
     homeButtonSignal: Int,
     onRequestSetDefaultHome: () -> Unit,
     onLaunchApp: (ComponentKey) -> Unit,
+    onLaunchShortcut: (LaunchTarget) -> Unit = {},
     onOpenFolder: (ItemId) -> Unit,
     onOpenSpotlight: () -> Unit,
     onOpenControlPanel: () -> Unit,
@@ -203,8 +214,8 @@ fun HomeScreen(
     val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
     val edgeThresholdPx = with(density) { 48.dp.toPx() }
     val scope = rememberCoroutineScope()
-    val canUndo by viewModel.canUndo.collectAsStateWithLifecycle()
-    val canRedo by viewModel.canRedo.collectAsStateWithLifecycle()
+    val canUndo = state.canUndo
+    val canRedo = state.canRedo
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
 
@@ -227,6 +238,15 @@ fun HomeScreen(
     val showAppLibrary = state.settings.showAppLibraryPage
     val totalPagerPages = workspacePages.size + if (showAppLibrary) 1 else 0
     val pagerState = rememberPagerState(initialPage = 0, pageCount = { totalPagerPages.coerceAtLeast(1) })
+    var savedPageIndex by rememberSaveable { mutableIntStateOf(0) }
+    var hasRestoredPage by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(workspacePages.size) {
+        if (!hasRestoredPage && workspacePages.size > 1 && savedPageIndex > 0 && savedPageIndex < totalPagerPages) {
+            hasRestoredPage = true
+            pagerState.scrollToPage(savedPageIndex)
+        }
+    }
 
     if (isEditMode) {
         BackHandler {
@@ -249,6 +269,9 @@ fun HomeScreen(
     LaunchedEffect(pagerState.currentPage) {
         focusManager.clearFocus(force = true)
         keyboardController?.hide()
+        if (workspacePages.isNotEmpty() && pagerState.currentPage in 0 until totalPagerPages) {
+            savedPageIndex = pagerState.currentPage
+        }
     }
 
     LaunchedEffect(pagerState.isScrollInProgress) {
@@ -262,6 +285,7 @@ fun HomeScreen(
         if (homeButtonSignal > 0) {
             focusManager.clearFocus(force = true)
             keyboardController?.hide()
+            savedPageIndex = 0
             if (isEditMode) {
                 viewModel.exitEditMode()
             } else if (pagerState.currentPage != 0) {
@@ -276,9 +300,23 @@ fun HomeScreen(
     // Pointer drag tracking in window coordinates
     var draggedWindowPos by remember { mutableStateOf(Offset.Zero) }
     var hoveredItemId by remember { mutableStateOf<ItemId?>(null) }
+    var hoverStartTimeMs by remember { mutableStateOf(0L) }
+    var isHoverHaloActive by remember { mutableStateOf(false) }
+    var springFolderJob by remember { mutableStateOf<Job?>(null) }
+    var qaAnchorBounds by remember { mutableStateOf<Rect?>(null) }
     var gridBoundsInWindow by remember { mutableStateOf<Rect?>(null) }
     var dockBoundsInWindow by remember { mutableStateOf<Rect?>(null) }
     var edgeScrollJob by remember { mutableStateOf<Job?>(null) }
+
+    LaunchedEffect(hoveredItemId, hoverStartTimeMs) {
+        if (hoveredItemId != null && hoverStartTimeMs > 0L) {
+            delay(280L)
+            isHoverHaloActive = true
+            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        } else {
+            isHoverHaloActive = false
+        }
+    }
 
     val defaultFolderTitle = stringResource(R.string.folder_default_name)
     val orphanNotice = stringResource(R.string.home_orphan_placeholder_notice)
@@ -580,6 +618,7 @@ fun HomeScreen(
                                     }
 
                                     var itemCenterInWindow by remember { mutableStateOf(Offset.Zero) }
+                                    var itemBoundsInWindow by remember { mutableStateOf(Rect.Zero) }
                                     val dragModifier = if (isEditMode) {
                                         Modifier.pointerInput(item.id, page.id, cols, rows) {
                                             detectDragGestures(
@@ -642,22 +681,47 @@ fun HomeScreen(
                                                         }?.id
                                                         val centerDistX = abs((relX % cellPxW) - cellPxW / 2f) / cellPxW
                                                         val centerDistY = abs((relY % cellPxH) - cellPxH / 2f) / cellPxH
-                                                        hoveredItemId = if (occ != null && centerDistX < 0.32f && centerDistY < 0.32f) occ else null
+                                                        val candidateOcc = if (occ != null && centerDistX < 0.32f && centerDistY < 0.32f) occ else null
+                                                        if (candidateOcc != hoveredItemId) {
+                                                            hoveredItemId = candidateOcc
+                                                            hoverStartTimeMs = if (candidateOcc != null) System.currentTimeMillis() else 0L
+                                                            isHoverHaloActive = false
+                                                            springFolderJob?.cancel()
+                                                            if (candidateOcc != null) {
+                                                                val targetItem = curPage?.items?.firstOrNull { it.id == candidateOcc }
+                                                                if (targetItem is WorkspaceItem.Folder) {
+                                                                    springFolderJob = scope.launch {
+                                                                        delay(500L)
+                                                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                                        onOpenFolder(targetItem.id)
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
                                                     } else {
                                                         hoveredItemId = null
+                                                        hoverStartTimeMs = 0L
+                                                        isHoverHaloActive = false
+                                                        springFolderJob?.cancel()
                                                     }
                                                 },
                                                 onDragCancel = {
                                                     edgeScrollJob?.cancel()
+                                                    springFolderJob?.cancel()
                                                     hoveredItemId = null
+                                                    hoverStartTimeMs = 0L
+                                                    isHoverHaloActive = false
                                                     viewModel.cancelDrag()
                                                 },
                                                 onDragEnd = {
                                                     edgeScrollJob?.cancel()
+                                                    springFolderJob?.cancel()
                                                     val dRect = dockBoundsInWindow
                                                     val gRect = gridBoundsInWindow
                                                     val hoverId = hoveredItemId
                                                     hoveredItemId = null
+                                                    hoverStartTimeMs = 0L
+                                                    isHoverHaloActive = false
                                                     val target: DropTarget? = when {
                                                         hoverId != null -> DropTarget.HoverItem(hoverId)
                                                         dRect != null && dRect.contains(draggedWindowPos) -> {
@@ -711,6 +775,7 @@ fun HomeScreen(
                                             .size(width = cellW * sx, height = cellH * sy)
                                             .onGloballyPositioned { coords ->
                                                 val b = coords.boundsInWindow()
+                                                itemBoundsInWindow = b
                                                 itemCenterInWindow = Offset(b.left, b.top)
                                             }
                                             .graphicsLayer {
@@ -721,6 +786,21 @@ fun HomeScreen(
                                             }
                                             .then(dragModifier),
                                     ) {
+                                        if (isHoverTarget && isHoverHaloActive) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(80.dp)
+                                                    .border(
+                                                        width = 2.dp,
+                                                        color = palette.accent.copy(alpha = 0.90f),
+                                                        shape = SquircleShape.Default,
+                                                    )
+                                                    .background(
+                                                        color = palette.accent.copy(alpha = 0.16f),
+                                                        shape = SquircleShape.Default,
+                                                    ),
+                                            )
+                                        }
                                         when (item) {
                                             is WorkspaceItem.App -> {
                                                 val entry = state.catalogByKey[item.component]
@@ -759,6 +839,7 @@ fun HomeScreen(
                                                     onLongClick = {
                                                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                                         if (!isEditMode) {
+                                                            qaAnchorBounds = itemBoundsInWindow
                                                             viewModel.openQuickActions(item)
                                                         }
                                                     },
@@ -778,11 +859,14 @@ fun HomeScreen(
                                                     useWallpaperScrimForLabel = true,
                                                     accessibilityActions = a11yActions,
                                                     onClick = {
-                                                        if (!isEditMode) viewModel.launchPinnedShortcut(item)
+                                                        if (!isEditMode) onLaunchShortcut(LaunchTarget.Pinned(item))
                                                     },
                                                     onLongClick = {
                                                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                        if (!isEditMode) viewModel.openQuickActions(item)
+                                                        if (!isEditMode) {
+                                                            qaAnchorBounds = itemBoundsInWindow
+                                                            viewModel.openQuickActions(item)
+                                                        }
                                                     },
                                                     onRemoveClick = { viewModel.removeItemFromHome(item.id) },
                                                 )
@@ -1040,12 +1124,14 @@ fun HomeScreen(
                                     Modifier
                                 }
                                 val isDockBeingDragged = activeDrag?.draggedItemId == dockItem?.id
+                                var dockBoundsInItem by remember { mutableStateOf(Rect.Zero) }
                                 Box(
                                     contentAlignment = Alignment.Center,
                                     modifier = Modifier
                                         .weight(1f)
                                         .onGloballyPositioned { coords ->
                                             val b = coords.boundsInWindow()
+                                            dockBoundsInItem = b
                                             dockCenterInWindow = Offset(b.left, b.top)
                                         }
                                         .graphicsLayer {
@@ -1094,7 +1180,10 @@ fun HomeScreen(
                                             },
                                             onLongClick = {
                                                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                if (!isEditMode) viewModel.openQuickActions(dockItem)
+                                                if (!isEditMode) {
+                                                    qaAnchorBounds = dockBoundsInItem
+                                                    viewModel.openQuickActions(dockItem)
+                                                }
                                             },
                                             onRemoveClick = { viewModel.removeItemFromHome(dockItem.id) },
                                         )
@@ -1164,114 +1253,207 @@ fun HomeScreen(
                     onClick = {},
                 )
             }
+
+            val halfExclusionPx = with(density) { 100.dp.toPx() }
+            val exclusionTopPx = (draggedWindowPos.y - halfExclusionPx).coerceAtLeast(0f)
+            val exclusionTopDp = with(density) { exclusionTopPx.toDp() }
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .offset(x = 0.dp, y = exclusionTopDp)
+                    .width(48.dp)
+                    .height(200.dp)
+                    .systemGestureExclusion(),
+            )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = 0.dp, y = exclusionTopDp)
+                    .width(48.dp)
+                    .height(200.dp)
+                    .systemGestureExclusion(),
+            )
         }
     }
 
-    // Long-press Quick Actions Menu (UC-06, UC-16)
+    // Long-press Quick Actions Menu (UC-06, UC-16) - Spatially Anchored Floating Menu
     val qaTarget = state.quickActionsTarget
     if (qaTarget != null) {
         val label = qaTarget.appEntry?.label
             ?: (qaTarget.item as? WorkspaceItem.PinnedShortcut)?.label
             ?: stringResource(R.string.aurora_app_name)
-        AlertDialog(
+        val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
+        val anchor = qaAnchorBounds
+
+        Popup(
             onDismissRequest = viewModel::dismissQuickActions,
-            title = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(AuroraSpacing.xs)) {
-                    qaTarget.shortcuts.forEach { sc ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .defaultMinSize(minHeight = AuroraSpacing.minTouchTarget)
-                                .clip(RoundedCornerShape(AuroraRadii.input))
-                                .background(palette.surfaceVariant)
-                                .clickable { viewModel.launchDynamicShortcut(sc) }
-                                .padding(horizontal = AuroraSpacing.sm),
-                        ) {
+            properties = PopupProperties(focusable = true),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = viewModel::dismissQuickActions,
+                    ),
+            ) {
+                val cardWidthDp = 270.dp
+                val cardWidthPx = with(density) { cardWidthDp.toPx() }
+                val clampedX = if (anchor != null) {
+                    (anchor.center.x - cardWidthPx / 2f).coerceIn(
+                        with(density) { 16.dp.toPx() },
+                        screenWidthPx - cardWidthPx - with(density) { 16.dp.toPx() },
+                    )
+                } else {
+                    (screenWidthPx - cardWidthPx) / 2f
+                }
+
+                val isLowerHalf = anchor != null && anchor.center.y > screenHeightPx * 0.52f
+
+                Box(
+                    modifier = Modifier
+                        .then(
+                            if (anchor == null) {
+                                Modifier.align(Alignment.Center)
+                            } else if (isLowerHalf) {
+                                Modifier
+                                    .align(Alignment.BottomStart)
+                                    .offset {
+                                        val bottomDist = (screenHeightPx - anchor.top + with(density) { 8.dp.toPx() }).roundToInt()
+                                        IntOffset(clampedX.roundToInt(), -bottomDist)
+                                    }
+                            } else {
+                                Modifier
+                                    .align(Alignment.TopStart)
+                                    .offset {
+                                        val topDist = (anchor.bottom + with(density) { 8.dp.toPx() }).roundToInt()
+                                        IntOffset(clampedX.roundToInt(), topDist)
+                                    }
+                            }
+                        )
+                        .width(cardWidthDp)
+                        .heightIn(max = 380.dp)
+                        .clip(RoundedCornerShape(AuroraRadii.card))
+                        .background(palette.surface)
+                        .border(1.dp, palette.outline.copy(alpha = 0.35f), RoundedCornerShape(AuroraRadii.card))
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
+                        .padding(AuroraSpacing.sm),
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(AuroraSpacing.xs),
+                    ) {
+                        Text(
+                            text = label,
+                            style = AuroraTypography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = palette.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(horizontal = AuroraSpacing.sm, vertical = AuroraSpacing.xs),
+                        )
+
+                        qaTarget.shortcuts.forEach { sc ->
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(AuroraSpacing.xs),
-                                modifier = Modifier.weight(1f),
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.BookmarkBorder,
-                                    contentDescription = null,
-                                    tint = palette.accent,
-                                )
-                                Text(
-                                    text = sc.shortLabel,
-                                    style = AuroraTypography.bodyMedium,
-                                    color = palette.onSurface,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                            IconButton(
-                                onClick = {
-                                    viewModel.pinAppShortcut(sc) { ok ->
-                                        onShowMessage(if (ok) addedNotice else fullNotice)
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .defaultMinSize(minHeight = AuroraSpacing.minTouchTarget)
+                                    .clip(RoundedCornerShape(AuroraRadii.input))
+                                    .background(palette.surfaceVariant)
+                                    .clickable {
+                                        viewModel.dismissQuickActions()
+                                        onLaunchShortcut(LaunchTarget.Dynamic(sc))
                                     }
+                                    .padding(horizontal = AuroraSpacing.sm),
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(AuroraSpacing.xs),
+                                    modifier = Modifier.weight(1f),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.BookmarkBorder,
+                                        contentDescription = null,
+                                        tint = palette.accent,
+                                    )
+                                    Text(
+                                        text = sc.shortLabel,
+                                        style = AuroraTypography.bodyMedium,
+                                        color = palette.onSurface,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                                IconButton(
+                                    onClick = {
+                                        viewModel.pinAppShortcut(sc) { ok ->
+                                            onShowMessage(if (ok) addedNotice else fullNotice)
+                                        }
+                                    },
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.PushPin,
+                                        contentDescription = stringResource(R.string.quick_action_pin_shortcut),
+                                        tint = palette.accent,
+                                    )
+                                }
+                            }
+                        }
+
+                        QuickMenuActionRow(stringResource(R.string.quick_action_edit_home)) {
+                            viewModel.dismissQuickActions()
+                            viewModel.enterEditMode()
+                        }
+                        QuickMenuActionRow(stringResource(R.string.a11y_move_dialog)) {
+                            val itemRef = qaTarget.item
+                            viewModel.dismissQuickActions()
+                            moveDialogTarget = itemRef
+                        }
+                        QuickMenuActionRow(stringResource(R.string.quick_action_remove_home)) {
+                            viewModel.dismissQuickActions()
+                            viewModel.removeItemFromHome(qaTarget.item.id)
+                        }
+
+                        if (qaTarget.item is WorkspaceItem.App) {
+                            val comp = qaTarget.item.component
+                            val locked = qaTarget.appEntry?.isLocked == true
+                            QuickMenuActionRow(
+                                if (locked) {
+                                    stringResource(R.string.quick_action_unlock_app)
+                                } else {
+                                    stringResource(R.string.quick_action_lock_app)
                                 },
                             ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.PushPin,
-                                    contentDescription = stringResource(R.string.quick_action_pin_shortcut),
-                                    tint = palette.accent,
-                                )
-                            }
-                        }
-                    }
-
-                    QuickMenuActionRow(stringResource(R.string.quick_action_edit_home)) {
-                        viewModel.enterEditMode()
-                    }
-                    QuickMenuActionRow(stringResource(R.string.a11y_move_dialog)) {
-                        val itemRef = qaTarget.item
-                        viewModel.dismissQuickActions()
-                        moveDialogTarget = itemRef
-                    }
-                    QuickMenuActionRow(stringResource(R.string.quick_action_remove_home)) {
-                        viewModel.removeItemFromHome(qaTarget.item.id)
-                    }
-
-                    if (qaTarget.item is WorkspaceItem.App) {
-                        val comp = qaTarget.item.component
-                        val locked = qaTarget.appEntry?.isLocked == true
-                        QuickMenuActionRow(
-                            if (locked) {
-                                stringResource(R.string.quick_action_unlock_app)
-                            } else {
-                                stringResource(R.string.quick_action_lock_app)
-                            },
-                        ) {
-                            viewModel.toggleLockApp(comp, locked)
-                        }
-                        QuickMenuActionRow(stringResource(R.string.quick_action_hide_app)) {
-                            viewModel.hideApp(comp)
-                        }
-                        QuickMenuActionRow(stringResource(R.string.quick_action_app_info)) {
-                            viewModel.openAppInfo(comp)
-                        }
-                        if (qaTarget.appEntry?.isSystemApp == false) {
-                            QuickMenuActionRow(
-                                label = stringResource(R.string.quick_action_uninstall),
-                                isDestructive = true,
-                            ) {
                                 viewModel.dismissQuickActions()
-                                uninstallConfirmTarget = comp to label
+                                viewModel.toggleLockApp(comp, locked)
+                            }
+                            QuickMenuActionRow(stringResource(R.string.quick_action_hide_app)) {
+                                viewModel.dismissQuickActions()
+                                viewModel.hideApp(comp)
+                            }
+                            QuickMenuActionRow(stringResource(R.string.quick_action_app_info)) {
+                                viewModel.dismissQuickActions()
+                                viewModel.openAppInfo(comp)
+                            }
+                            if (qaTarget.appEntry?.isSystemApp == false) {
+                                QuickMenuActionRow(
+                                    label = stringResource(R.string.quick_action_uninstall),
+                                    isDestructive = true,
+                                ) {
+                                    viewModel.dismissQuickActions()
+                                    uninstallConfirmTarget = comp to label
+                                }
                             }
                         }
                     }
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = viewModel::dismissQuickActions) {
-                    Text(stringResource(R.string.action_close))
-                }
-            },
-        )
+            }
+        }
     }
 
     // Uninstall confirmation protected by filterTouchesWhenObscured (section 11.3)

@@ -43,15 +43,14 @@ data class InstalledCatalogSnapshot(
     val uninstalledOrHiddenPackages: Set<String> = emptySet(),
 )
 
-@Singleton
-class LauncherAppsGateway @Inject constructor(
-    @ApplicationContext private val context: Context,
-    private val dispatchers: AuroraDispatchers,
+open class LauncherAppsGateway(
+    private val context: Context? = null,
+    private val dispatchers: AuroraDispatchers? = null,
 ) {
-    private val launcherApps = context.getSystemService(LauncherApps::class.java)
-    private val userManager = context.getSystemService(UserManager::class.java)
+    private val launcherApps = context?.getSystemService(LauncherApps::class.java)
+    private val userManager = context?.getSystemService(UserManager::class.java)
 
-    val catalogInvalidations: Flow<Set<String>> = callbackFlow {
+    open val catalogInvalidations: Flow<Set<String>> = if (context == null) kotlinx.coroutines.flow.emptyFlow() else callbackFlow {
         val mainHandler = Handler(Looper.getMainLooper())
         val callback = object : LauncherApps.Callback() {
             override fun onPackageRemoved(packageName: String?, user: UserHandle?) {
@@ -128,11 +127,11 @@ class LauncherAppsGateway @Inject constructor(
         }
     }
 
-    suspend fun queryInstalledCatalog(): InstalledCatalogSnapshot = withContext(dispatchers.io) {
+    open suspend fun queryInstalledCatalog(): InstalledCatalogSnapshot = withContext(dispatchers?.io ?: kotlinx.coroutines.Dispatchers.IO) {
         val profiles = safeSystemCall { userManager?.userProfiles.orEmpty() }
             .getOrNull()
             .orEmpty()
-            .ifEmpty { listOf(Process.myUserHandle()) }
+            .ifEmpty { safeSystemCall { listOf(Process.myUserHandle()) }.getOrNull().orEmpty() }
 
         val entries = ArrayList<AppEntry>()
         var privateSpaceLocked = false
@@ -154,7 +153,7 @@ class LauncherAppsGateway @Inject constructor(
 
             for (info in activityList) {
                 val pkg = info.componentName.packageName
-                if (pkg == context.packageName) continue
+                if (pkg == context?.packageName) continue
                 entries += mapActivityToAppEntry(
                     info = info,
                     userSerial = serial,
@@ -175,7 +174,7 @@ class LauncherAppsGateway @Inject constructor(
         )
     }
 
-    fun launchActivity(key: ComponentKey, sourceBounds: Rect? = null): SystemResult<Unit> {
+    open fun launchActivity(key: ComponentKey, sourceBounds: Rect? = null): SystemResult<Unit> {
         return safeSystemCall {
             val handle = resolveUserHandle(key.userSerial)
             val quietMode = userManager?.isQuietModeEnabled(handle) == true
@@ -183,7 +182,7 @@ class LauncherAppsGateway @Inject constructor(
                 throw IllegalStateException("Profile is paused in quiet mode")
             }
             val component = ComponentName(key.packageName, key.activityClass)
-            val options = if (sourceBounds != null && sourceBounds.width() > 0 && sourceBounds.height() > 0) {
+            val options = if (context != null && sourceBounds != null && sourceBounds.width() > 0 && sourceBounds.height() > 0) {
                 ActivityOptions.makeClipRevealAnimation(
                     android.view.View(context),
                     sourceBounds.left,
@@ -199,7 +198,7 @@ class LauncherAppsGateway @Inject constructor(
         }
     }
 
-    suspend fun queryAppShortcuts(key: ComponentKey): List<AppShortcutItem> = withContext(dispatchers.io) {
+    open suspend fun queryAppShortcuts(key: ComponentKey): List<AppShortcutItem> = withContext(dispatchers?.io ?: kotlinx.coroutines.Dispatchers.IO) {
         val hasPerm = safeSystemCall { launcherApps?.hasShortcutHostPermission() == true }.getOrNull() ?: false
         if (!hasPerm) return@withContext emptyList()
 
@@ -235,7 +234,7 @@ class LauncherAppsGateway @Inject constructor(
         }.getOrNull().orEmpty()
     }
 
-    fun launchShortcut(
+    open fun launchShortcut(
         packageName: String,
         shortcutId: String,
         userSerial: Long,
@@ -248,7 +247,7 @@ class LauncherAppsGateway @Inject constructor(
         }
     }
 
-    fun openAppInfo(key: ComponentKey, sourceBounds: Rect? = null): SystemResult<Unit> {
+    open fun openAppInfo(key: ComponentKey, sourceBounds: Rect? = null): SystemResult<Unit> {
         return safeSystemCall {
             val handle = resolveUserHandle(key.userSerial)
             val component = ComponentName(key.packageName, key.activityClass)
@@ -259,12 +258,12 @@ class LauncherAppsGateway @Inject constructor(
                     Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                     Uri.fromParts("package", key.packageName, null),
                 ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                context.startActivity(intent)
+                context?.startActivity(intent)
             }
         }
     }
 
-    fun requestUninstall(key: ComponentKey): SystemResult<Unit> {
+    open fun requestUninstall(key: ComponentKey): SystemResult<Unit> {
         return safeSystemCall {
             val intent = Intent(
                 Intent.ACTION_DELETE,
@@ -273,8 +272,24 @@ class LauncherAppsGateway @Inject constructor(
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 putExtra(Intent.EXTRA_USER, resolveUserHandle(key.userSerial))
             }
-            context.startActivity(intent)
+            context?.startActivity(intent)
         }
+    }
+
+    open fun requestUnlockPrivateSpace(): Boolean {
+        return safeSystemCall {
+            val profiles = userManager?.userProfiles.orEmpty()
+            for (profile in profiles) {
+                val serial = userManager?.getSerialNumberForUser(profile) ?: 0L
+                val badge = resolveProfileBadge(profile, serial)
+                if (badge == ProfileBadge.PRIVATE && userManager?.isQuietModeEnabled(profile) == true) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        return@safeSystemCall userManager?.requestQuietModeEnabled(false, profile) == true
+                    }
+                }
+            }
+            false
+        }.getOrNull() ?: false
     }
 
     private fun mapActivityToAppEntry(
@@ -293,7 +308,7 @@ class LauncherAppsGateway @Inject constructor(
         val category = appInfo.category.takeIf { it != ApplicationInfo.CATEGORY_UNDEFINED }
 
         val pkgInfo = safeSystemCall {
-            context.packageManager.getPackageInfo(pkg, PackageManager.GET_PERMISSIONS)
+            context?.packageManager?.getPackageInfo(pkg, PackageManager.GET_PERMISSIONS)
         }.getOrNull()
         val permissions = pkgInfo?.requestedPermissions?.toSet().orEmpty()
         val installTime = info.firstInstallTime.takeIf { it > 0L } ?: (pkgInfo?.firstInstallTime ?: 0L)
@@ -331,7 +346,8 @@ class LauncherAppsGateway @Inject constructor(
     }
 
     private fun resolveProfileBadge(profile: UserHandle, serial: Long): ProfileBadge {
-        if (profile == Process.myUserHandle() || serial == 0L) {
+        val myHandle = safeSystemCall { Process.myUserHandle() }.getOrNull()
+        if (profile == myHandle || serial == 0L) {
             return ProfileBadge.PERSONAL
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
@@ -349,7 +365,7 @@ class LauncherAppsGateway @Inject constructor(
         return ProfileBadge.WORK
     }
 
-    fun resolveUserHandle(userSerial: Long): UserHandle {
+    open fun resolveUserHandle(userSerial: Long): UserHandle {
         return safeSystemCall { userManager?.getUserForSerialNumber(userSerial) }.getOrNull()
             ?: Process.myUserHandle()
     }

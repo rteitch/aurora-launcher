@@ -22,8 +22,8 @@ android {
 
     defaultConfig {
         applicationId = "app.aurora.launcher"
-        versionCode = 7
-        versionName = "1.1.6"
+        versionCode = 8
+        versionName = "1.2.0"
     }
 
     flavorDimensions += "edition"
@@ -101,6 +101,7 @@ dependencies {
 
     testImplementation(libs.junit4)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(project(":core:testing"))
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.espresso.core)

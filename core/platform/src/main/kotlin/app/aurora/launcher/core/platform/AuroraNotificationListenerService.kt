@@ -1,6 +1,7 @@
 package app.aurora.launcher.core.platform
 
 import android.app.Notification
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
@@ -87,39 +88,49 @@ interface NotificationBadgeEntryPoint {
     fun badgeGateway(): NotificationBadgeGateway
 }
 
-@Singleton
-class NotificationBadgeGateway @Inject constructor(
-    @ApplicationContext private val context: Context,
+open class NotificationBadgeGateway(
+    private val context: Context? = null,
 ) {
     // Query PackageManager by action intent rather than class literal so R8 strips the service in sideload builds.
-    fun readCapability(): BadgeServiceCapability {
+    open fun readCapability(): BadgeServiceCapability {
+        val ctx = context ?: return BadgeServiceCapability.UNSUPPORTED_IN_BUILD
         val declaredServices = safeSystemCall {
             val query = Intent("android.service.notification.NotificationListenerService")
-                .setPackage(context.packageName)
+                .setPackage(ctx.packageName)
             @Suppress("DEPRECATION")
-            context.packageManager.queryIntentServices(query, 0)
+            ctx.packageManager.queryIntentServices(query, 0)
                 .mapNotNull { it.serviceInfo?.name }
         }.getOrNull().orEmpty()
         val enabled = safeSystemCall {
-            Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
+            Settings.Secure.getString(ctx.contentResolver, "enabled_notification_listeners")
         }.getOrNull().orEmpty()
         return resolveCapability(
-            packageName = context.packageName,
+            packageName = ctx.packageName,
             declaredServiceNames = declaredServices,
             enabledListenersColonSeparated = enabled,
         )
     }
 
-    fun isNotificationAccessGranted(): Boolean {
+    open fun isNotificationAccessGranted(): Boolean {
         return readCapability() == BadgeServiceCapability.GRANTED
     }
 
-    fun openNotificationListenerSettings(): SystemResult<Unit> {
+    open fun requestRebindService(): Boolean {
+        val ctx = context ?: return false
+        return safeSystemCall {
+            val cn = ComponentName(ctx, "app.aurora.launcher.core.platform.AuroraNotificationListenerService")
+            NotificationListenerService.requestRebind(cn)
+            true
+        }.getOrNull() ?: false
+    }
+
+    open fun openNotificationListenerSettings(): SystemResult<Unit> {
+        val ctx = context ?: return SystemResult.Failure("No context")
         return safeSystemCall {
             val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            context.startActivity(intent)
+            ctx.startActivity(intent)
         }
     }
 
@@ -179,6 +190,11 @@ class AuroraNotificationListenerService : NotificationListenerService() {
     override fun onListenerDisconnected() {
         val stillGranted = entryPoint.badgeGateway().isNotificationAccessGranted()
         entryPoint.badgeStore().onDisconnected(permissionStillGranted = stillGranted)
+        if (stillGranted) {
+            safeSystemCall {
+                requestRebind(ComponentName(this, AuroraNotificationListenerService::class.java))
+            }
+        }
         super.onListenerDisconnected()
     }
 

@@ -30,12 +30,11 @@ data class ControlPanelSnapshot(
     val canWriteSettings: Boolean = false,
 )
 
-@Singleton
-class ControlPanelGateway @Inject constructor(
-    @ApplicationContext private val context: Context,
+open class ControlPanelGateway(
+    private val context: Context? = null,
 ) {
-    private val cameraManager = context.getSystemService(CameraManager::class.java)
-    private val audioManager = context.getSystemService(AudioManager::class.java)
+    private val cameraManager = context?.getSystemService(CameraManager::class.java)
+    private val audioManager = context?.getSystemService(AudioManager::class.java)
 
     private val torchCameraId: String? = safeSystemCall {
         cameraManager?.cameraIdList?.firstOrNull { id ->
@@ -50,7 +49,7 @@ class ControlPanelGateway @Inject constructor(
     }.getOrNull()
 
     private val _state = MutableStateFlow(readInitialSnapshot())
-    val state: StateFlow<ControlPanelSnapshot> = _state.asStateFlow()
+    open val state: StateFlow<ControlPanelSnapshot> = _state.asStateFlow()
 
     init {
         if (cameraManager != null && torchCameraId != null) {
@@ -69,14 +68,14 @@ class ControlPanelGateway @Inject constructor(
         }
     }
 
-    fun refreshSnapshot() {
+    open fun refreshSnapshot() {
         _state.update { current ->
             val fresh = readInitialSnapshot()
             fresh.copy(isTorchOn = current.isTorchOn)
         }
     }
 
-    fun toggleTorch(): SystemResult<Boolean> {
+    open fun toggleTorch(): SystemResult<Boolean> {
         val camId = torchCameraId ?: return SystemResult.Failure("Flashlight unavailable")
         val next = !_state.value.isTorchOn
         return safeSystemCall {
@@ -86,7 +85,7 @@ class ControlPanelGateway @Inject constructor(
         }
     }
 
-    fun setMediaVolume(volume: Int): SystemResult<Unit> {
+    open fun setMediaVolume(volume: Int): SystemResult<Unit> {
         return safeSystemCall {
             val maxVol = audioManager?.getStreamMaxVolume(AudioManager.STREAM_MUSIC) ?: 15
             val clamped = volume.coerceIn(0, maxVol)
@@ -95,7 +94,7 @@ class ControlPanelGateway @Inject constructor(
         }
     }
 
-    fun dispatchMediaKey(keyCode: Int): SystemResult<Unit> {
+    open fun dispatchMediaKey(keyCode: Int): SystemResult<Unit> {
         return safeSystemCall {
             audioManager?.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
             audioManager?.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode))
@@ -103,8 +102,9 @@ class ControlPanelGateway @Inject constructor(
         }
     }
 
-    fun setScreenBrightness(value: Int): SystemResult<Unit> {
-        val canWrite = safeSystemCall { Settings.System.canWrite(context) }.getOrNull() ?: false
+    open fun setScreenBrightness(value: Int): SystemResult<Unit> {
+        val ctx = context ?: return SystemResult.Failure("Context unavailable")
+        val canWrite = safeSystemCall { Settings.System.canWrite(ctx) }.getOrNull() ?: false
         if (!canWrite) {
             _state.update { it.copy(canWriteSettings = false) }
             return SystemResult.Failure("Write settings permission required")
@@ -112,12 +112,12 @@ class ControlPanelGateway @Inject constructor(
         return safeSystemCall {
             val clamped = value.coerceIn(10, 255)
             Settings.System.putInt(
-                context.contentResolver,
+                ctx.contentResolver,
                 Settings.System.SCREEN_BRIGHTNESS_MODE,
                 Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL,
             )
             Settings.System.putInt(
-                context.contentResolver,
+                ctx.contentResolver,
                 Settings.System.SCREEN_BRIGHTNESS,
                 clamped,
             )
@@ -125,17 +125,18 @@ class ControlPanelGateway @Inject constructor(
         }
     }
 
-    fun openWriteSettingsPermission(): SystemResult<Unit> {
+    open fun openWriteSettingsPermission(): SystemResult<Unit> {
+        val ctx = context ?: return SystemResult.Failure("Context unavailable")
         return safeSystemCall {
             val intent = Intent(
                 Settings.ACTION_MANAGE_WRITE_SETTINGS,
-                Uri.parse("package:${context.packageName}"),
+                Uri.parse("package:${ctx.packageName}"),
             ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(intent)
+            ctx.startActivity(intent)
         }
     }
 
-    fun openInternetPanel(): SystemResult<Unit> {
+    open fun openInternetPanel(): SystemResult<Unit> {
         val action = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             Settings.Panel.ACTION_INTERNET_CONNECTIVITY
         } else {
@@ -144,22 +145,23 @@ class ControlPanelGateway @Inject constructor(
         return launchSettingsIntent(action)
     }
 
-    fun openBluetoothSettings(): SystemResult<Unit> =
+    open fun openBluetoothSettings(): SystemResult<Unit> =
         launchSettingsIntent(Settings.ACTION_BLUETOOTH_SETTINGS)
 
-    fun openDisplaySettings(): SystemResult<Unit> =
+    open fun openDisplaySettings(): SystemResult<Unit> =
         launchSettingsIntent(Settings.ACTION_DISPLAY_SETTINGS)
 
-    fun openSoundAndDndSettings(): SystemResult<Unit> =
+    open fun openSoundAndDndSettings(): SystemResult<Unit> =
         launchSettingsIntent(Settings.ACTION_SOUND_SETTINGS)
 
     private fun launchSettingsIntent(action: String): SystemResult<Unit> {
+        val ctx = context ?: return SystemResult.Failure("Context unavailable")
         return safeSystemCall {
             val intent = Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            if (intent.resolveActivity(context.packageManager) != null) {
-                context.startActivity(intent)
+            if (intent.resolveActivity(ctx.packageManager) != null) {
+                ctx.startActivity(intent)
             } else {
-                context.startActivity(
+                ctx.startActivity(
                     Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                 )
             }
@@ -174,9 +176,10 @@ class ControlPanelGateway @Inject constructor(
             audioManager?.getStreamVolume(AudioManager.STREAM_MUSIC) ?: (maxVol / 2)
         }.getOrNull()?.coerceIn(0, maxVol) ?: (maxVol / 2)
         val brightness = safeSystemCall {
-            Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS, 140)
+            val cr = context?.contentResolver ?: return@safeSystemCall 140
+            Settings.System.getInt(cr, Settings.System.SCREEN_BRIGHTNESS, 140)
         }.getOrNull()?.coerceIn(10, 255) ?: 140
-        val canWrite = safeSystemCall { Settings.System.canWrite(context) }.getOrNull() ?: false
+        val canWrite = safeSystemCall { context?.let { Settings.System.canWrite(it) } ?: false }.getOrNull() ?: false
 
         return ControlPanelSnapshot(
             isTorchAvailable = torchCameraId != null,

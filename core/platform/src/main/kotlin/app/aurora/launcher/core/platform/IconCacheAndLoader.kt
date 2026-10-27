@@ -1,6 +1,7 @@
 package app.aurora.launcher.core.platform
 
 import android.app.ActivityManager
+import android.content.ComponentCallbacks2
 import android.content.ComponentName
 import android.content.Context
 import android.content.pm.LauncherApps
@@ -24,54 +25,81 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.roundToInt
 
-@Singleton
-class IconCacheAndLoader @Inject constructor(
-    @ApplicationContext private val context: Context,
-    private val iconPackGateway: IconPackGateway,
-    private val dispatchers: AuroraDispatchers,
+open class IconCacheAndLoader(
+    private val context: Context? = null,
+    private val iconPackGateway: IconPackGateway? = null,
+    private val dispatchers: AuroraDispatchers? = null,
 ) {
-    private val launcherApps = context.getSystemService(LauncherApps::class.java)
-    private val userManager = context.getSystemService(UserManager::class.java)
+    private val launcherApps = context?.getSystemService(LauncherApps::class.java)
+    private val userManager = context?.getSystemService(UserManager::class.java)
 
-    // Smaller cache budget on Android Go / low-RAM devices prevents LMK pressure (E25).
-    private val maxEntries: Int = run {
-        val am = context.getSystemService(ActivityManager::class.java)
-        if (am?.isLowRamDevice == true) 64 else 180
+    val isLowRamDevice: Boolean = run {
+        val am = context?.getSystemService(ActivityManager::class.java)
+        am?.isLowRamDevice == true
     }
 
-    private val memoryCache = object : LruCache<String, ImageBitmap>(maxEntries) {}
+    // Byte-weighted LruCache: 8 MB on Android Go / low-RAM devices, 24 MB on standard devices (E25).
+    private val maxCacheBytes: Int = if (isLowRamDevice) 8 * 1024 * 1024 else 24 * 1024 * 1024
 
-    fun peekCachedIcon(key: ComponentKey, iconPackPackage: String? = null): ImageBitmap? {
+    private val memoryCache = object : LruCache<String, ImageBitmap>(maxCacheBytes) {
+        override fun sizeOf(key: String, value: ImageBitmap): Int {
+            return value.width * value.height * 4
+        }
+    }
+
+    open fun peekCachedIcon(key: ComponentKey, iconPackPackage: String? = null): ImageBitmap? {
         return memoryCache.get(cacheKey(key, iconPackPackage))
     }
 
-    suspend fun loadAppIcon(
+    open suspend fun loadAppIcon(
         key: ComponentKey,
         iconPackPackage: String? = null,
         sizePx: Int = 192,
     ): ImageBitmap? {
+        val targetSizePx = if (isLowRamDevice) sizePx.coerceIn(96, 128) else sizePx.coerceIn(96, 256)
         val cKey = cacheKey(key, iconPackPackage)
         memoryCache.get(cKey)?.let { return it }
 
-        return withContext(dispatchers.io) {
+        val ioDispatcher = dispatchers?.io ?: kotlinx.coroutines.Dispatchers.IO
+        return withContext(ioDispatcher) {
             memoryCache.get(cKey)?.let { return@withContext it }
 
             val customDrawable = if (!iconPackPackage.isNullOrBlank()) {
-                iconPackGateway.loadCustomDrawable(iconPackPackage, key)
+                iconPackGateway?.loadCustomDrawable(iconPackPackage, key)
             } else {
                 null
             }
 
             val drawable = customDrawable ?: resolveSystemDrawable(key) ?: return@withContext null
-            val bitmap = rasterizeDrawable(drawable, sizePx.coerceIn(96, 256)).asImageBitmap()
+            val bitmap = rasterizeDrawable(drawable, targetSizePx).asImageBitmap()
             memoryCache.put(cKey, bitmap)
             bitmap
         }
     }
 
-    fun invalidateAll() {
-        memoryCache.evictAll()
-        iconPackGateway.clearCache()
+    open fun invalidateAll() {
+        safeSystemCall { memoryCache.evictAll() }
+        iconPackGateway?.clearCache()
+    }
+
+    open fun trimMemory(level: Int) {
+        safeSystemCall {
+            when {
+                level >= ComponentCallbacks2.TRIM_MEMORY_COMPLETE ||
+                level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL ||
+                (isLowRamDevice && level >= ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) -> {
+                    memoryCache.evictAll()
+                    iconPackGateway?.clearCache()
+                }
+                level >= ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN ||
+                level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW -> {
+                    memoryCache.trimToSize(maxCacheBytes / 2)
+                }
+                isLowRamDevice && level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_MODERATE -> {
+                    memoryCache.trimToSize(maxCacheBytes / 2)
+                }
+            }
+        }
     }
 
     private fun resolveSystemDrawable(key: ComponentKey): Drawable? {
@@ -85,7 +113,7 @@ class IconCacheAndLoader @Inject constructor(
             if (match != null) {
                 match.getBadgedIcon(0)
             } else {
-                context.packageManager.getActivityIcon(
+                context?.packageManager?.getActivityIcon(
                     ComponentName(key.packageName, key.activityClass),
                 )
             }

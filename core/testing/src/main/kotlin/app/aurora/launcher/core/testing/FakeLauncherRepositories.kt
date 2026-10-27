@@ -10,6 +10,7 @@ import app.aurora.launcher.core.data.repository.WorkspaceRepository
 import app.aurora.launcher.core.model.AppEntry
 import app.aurora.launcher.core.model.AppWidgetId
 import app.aurora.launcher.core.model.ComponentKey
+import app.aurora.launcher.core.model.ContainerPlacement
 import app.aurora.launcher.core.model.DropResolution
 import app.aurora.launcher.core.model.GridOccupancyEngine
 import app.aurora.launcher.core.model.GridSpec
@@ -45,12 +46,15 @@ class FakeAppCatalogRepository(
     initialApps: List<AppEntry> = emptyList(),
 ) : AppCatalogRepository {
     private val state = MutableStateFlow(initialApps)
+    private val privateSpaceLockedFlow = MutableStateFlow(false)
     override val allApps: Flow<List<AppEntry>> = state
     override val recentlyAddedApps: Flow<List<AppEntry>> = state.map { it.filter { a -> !a.isHidden }.take(8) }
     override val frequentlyUsedApps: Flow<List<AppEntry>> = state.map { it.filter { a -> !a.isHidden && a.launchCount > 0 }.take(8) }
+    override val isPrivateSpaceLocked: Flow<Boolean> = privateSpaceLockedFlow
 
-    override suspend fun syncInstalledApps(installed: List<AppEntry>) {
+    override suspend fun syncInstalledApps(installed: List<AppEntry>, isPrivateSpaceLocked: Boolean) {
         state.value = installed
+        privateSpaceLockedFlow.value = isPrivateSpaceLocked
     }
     override suspend fun purgePrivateSpaceApps() {
         state.update { list -> list.filter { it.profileBadge.name != "PRIVATE" } }
@@ -71,8 +75,10 @@ class FakeAppCatalogRepository(
     }
 }
 
-class FakeSearchHistoryRepository : SearchHistoryRepository {
-    private val queries = MutableStateFlow<List<String>>(emptyList())
+class FakeSearchHistoryRepository(
+    initialQueries: List<String> = emptyList(),
+) : SearchHistoryRepository {
+    private val queries = MutableStateFlow<List<String>>(initialQueries)
     override val recentQueries: Flow<List<String>> = queries
     override suspend fun recordQuery(query: String) {
         val t = query.trim()
@@ -119,6 +125,57 @@ class FakeWorkspaceRepository(
     override suspend fun applyDrop(snapshot: WorkspaceSnapshot, resolution: DropResolution) {}
     override suspend fun addAppToHome(component: ComponentKey, gridSpec: GridSpec): Boolean = true
     override suspend fun removeItemFromHome(itemId: ItemId): List<AppWidgetId> = emptyList()
+    override suspend fun extractChildFromFolder(childItemId: ItemId): Boolean {
+        var foundChild: WorkspaceItem.App? = null
+        var foundFolder: WorkspaceItem.Folder? = null
+        for (p in current.value.pages) {
+            for (item in p.items) {
+                if (item is WorkspaceItem.Folder) {
+                    val c = item.children.firstOrNull { it.id == childItemId }
+                    if (c != null) {
+                        foundFolder = item
+                        foundChild = c
+                        break
+                    }
+                }
+            }
+            if (foundFolder != null) break
+        }
+        if (foundFolder == null || foundChild == null) return false
+
+        val strippedPages = current.value.pages.map { p ->
+            p.copy(
+                items = p.items.map { item ->
+                    if (item is WorkspaceItem.Folder && item.id == foundFolder.id) {
+                        item.copy(children = item.children.filter { it.id != childItemId })
+                    } else {
+                        item
+                    }
+                },
+            )
+        }
+
+        val targetPageId = when (val p = foundFolder.placement) {
+            is ContainerPlacement.Desktop -> p.pageId
+            is ContainerPlacement.Dock -> strippedPages.firstOrNull()?.id ?: PageId(1L)
+        }
+        val targetPage = strippedPages.firstOrNull { it.id == targetPageId } ?: strippedPages.first()
+        val free = GridOccupancyEngine.findFirstFreeSpan(
+            items = targetPage.items,
+            columns = current.value.gridSpec.columns,
+            rows = current.value.gridSpec.rows,
+            spanX = 1,
+            spanY = 1,
+        ) ?: (0 to 0)
+        val extractedApp = foundChild.copy(placement = LeafPlacement.Desktop(targetPage.id, free.first, free.second))
+
+        val placedPages = strippedPages.map { p ->
+            if (p.id == targetPage.id) p.copy(items = p.items + extractedApp) else p
+        }
+        val updated = current.value.copy(pages = placedPages)
+        current.value = GridOccupancyEngine.normalizeSnapshot(updated)
+        return true
+    }
     override suspend fun renameFolder(folderId: ItemId, newTitle: String) {}
     override suspend fun placeWidget(
         candidate: WidgetProviderCandidate,
@@ -170,4 +227,32 @@ class FakeBackupRepository : BackupRepository {
     override suspend fun exportBackupJson(currentSettings: LauncherSettings): String = "{}"
     override suspend fun importBackupJson(rawJson: String): SystemResult<Int> = SystemResult.Success(0)
     override suspend fun wipeAllLocalData(): List<AppWidgetId> = emptyList()
+}
+
+class FakeLauncherAppsGateway(
+    val launchedActivities: MutableList<ComponentKey> = mutableListOf(),
+    val launchedShortcuts: MutableList<Triple<String, String, Long>> = mutableListOf(),
+) : app.aurora.launcher.core.platform.LauncherAppsGateway() {
+    override fun launchActivity(key: ComponentKey, sourceBounds: android.graphics.Rect?): SystemResult<Unit> {
+        launchedActivities.add(key)
+        return SystemResult.Success(Unit)
+    }
+
+    override fun launchShortcut(
+        packageName: String,
+        shortcutId: String,
+        userSerial: Long,
+        sourceBounds: android.graphics.Rect?,
+    ): SystemResult<Unit> {
+        launchedShortcuts.add(Triple(packageName, shortcutId, userSerial))
+        return SystemResult.Success(Unit)
+    }
+
+    override suspend fun queryAppShortcuts(key: ComponentKey): List<app.aurora.launcher.core.model.AppShortcutItem> {
+        return emptyList()
+    }
+
+    override suspend fun queryInstalledCatalog(): app.aurora.launcher.core.platform.InstalledCatalogSnapshot {
+        return app.aurora.launcher.core.platform.InstalledCatalogSnapshot(emptyList(), false)
+    }
 }

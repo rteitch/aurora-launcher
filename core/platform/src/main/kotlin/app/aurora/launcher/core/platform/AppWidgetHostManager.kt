@@ -12,6 +12,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
+import android.os.Bundle
 import android.os.UserManager
 import android.util.LruCache
 import android.util.TypedValue
@@ -28,13 +29,14 @@ import app.aurora.launcher.core.model.ComponentKey
 import app.aurora.launcher.core.model.GridSpec
 import app.aurora.launcher.core.model.WidgetProviderCandidate
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.ceil
 import kotlin.math.max
 
-internal object WidgetSpanCalculator {
+object WidgetSpanCalculator {
     // Standard Android launcher cell formula: 70dp per cell minus 30dp margin allowance.
     fun dpToCells(dp: Int, maxCells: Int): Int {
         if (dp <= 0) return 1
@@ -87,27 +89,28 @@ class SafeAppWidgetHostView(
     }
 }
 
-@Singleton
-class AppWidgetHostManager @Inject constructor(
-    @ApplicationContext private val context: Context,
-    private val dispatchers: AuroraDispatchers,
+open class AppWidgetHostManager(
+    private val context: Context? = null,
+    private val dispatchers: AuroraDispatchers? = null,
 ) : DefaultLifecycleObserver {
 
     companion object {
         const val HOST_ID = 1024
     }
 
-    private val appWidgetManager: AppWidgetManager = AppWidgetManager.getInstance(context)
-    private val userManager: UserManager? = context.getSystemService(UserManager::class.java)
-    private val appWidgetHost = object : AppWidgetHost(context, HOST_ID) {
-        override fun onCreateView(
-            context: Context,
-            appWidgetId: Int,
-            appWidget: AppWidgetProviderInfo?,
-        ): AppWidgetHostView {
-            return SafeAppWidgetHostView(context, errorLabel = defaultErrorLabel)
+    private val appWidgetManager: AppWidgetManager? = if (context != null) AppWidgetManager.getInstance(context) else null
+    private val userManager: UserManager? = context?.getSystemService(UserManager::class.java)
+    private val appWidgetHost = if (context != null) {
+        object : AppWidgetHost(context, HOST_ID) {
+            override fun onCreateView(
+                context: Context,
+                appWidgetId: Int,
+                appWidget: AppWidgetProviderInfo?,
+            ): AppWidgetHostView {
+                return SafeAppWidgetHostView(context, errorLabel = defaultErrorLabel)
+            }
         }
-    }
+    } else null
 
     @Volatile
     private var defaultErrorLabel: String = "Widget unavailable"
@@ -117,20 +120,20 @@ class AppWidgetHostManager @Inject constructor(
     }
 
     override fun onStart(owner: LifecycleOwner) {
-        safeSystemCall { appWidgetHost.startListening() }
+        safeSystemCall { appWidgetHost?.startListening() }
     }
 
     override fun onStop(owner: LifecycleOwner) {
-        safeSystemCall { appWidgetHost.stopListening() }
+        safeSystemCall { appWidgetHost?.stopListening() }
     }
 
     fun allocateWidgetId(): Int {
-        return safeSystemCall { appWidgetHost.allocateAppWidgetId() }.getOrNull() ?: -1
+        return safeSystemCall { appWidgetHost?.allocateAppWidgetId() ?: -1 }.getOrNull() ?: -1
     }
 
-    fun deleteWidgetId(appWidgetId: Int) {
+    open fun deleteWidgetId(appWidgetId: Int) {
         if (appWidgetId <= 0) return
-        safeSystemCall { appWidgetHost.deleteAppWidgetId(appWidgetId) }
+        safeSystemCall { appWidgetHost?.deleteAppWidgetId(appWidgetId) }
     }
 
     fun bindWidgetIfAllowed(
@@ -141,7 +144,7 @@ class AppWidgetHostManager @Inject constructor(
             val provider = ComponentName(candidate.provider.packageName, candidate.provider.activityClass)
             val handle = userManager?.getUserForSerialNumber(candidate.provider.userSerial)
                 ?: android.os.Process.myUserHandle()
-            appWidgetManager.bindAppWidgetIdIfAllowed(appWidgetId, handle, provider, null)
+            appWidgetManager?.bindAppWidgetIdIfAllowed(appWidgetId, handle, provider, null) ?: false
         }.getOrNull() ?: false
     }
 
@@ -160,7 +163,7 @@ class AppWidgetHostManager @Inject constructor(
     }
 
     fun getProviderInfo(appWidgetId: Int): AppWidgetProviderInfo? {
-        return safeSystemCall { appWidgetManager.getAppWidgetInfo(appWidgetId) }.getOrNull()
+        return safeSystemCall { appWidgetManager?.getAppWidgetInfo(appWidgetId) }.getOrNull()
     }
 
     fun createConfigurationIntent(appWidgetId: Int): Intent? {
@@ -180,19 +183,44 @@ class AppWidgetHostManager @Inject constructor(
         defaultErrorLabel = errorText
         val info = getProviderInfo(appWidgetId) ?: return null
         return safeSystemCall {
-            val view = appWidgetHost.createView(activityContext, appWidgetId, info)
+            val view = appWidgetHost?.createView(activityContext, appWidgetId, info)
             (view as? SafeAppWidgetHostView) ?: SafeAppWidgetHostView(activityContext, errorText).apply {
                 setAppWidget(appWidgetId, info)
             }
         }.getOrNull()
     }
 
+    fun updateWidgetSize(
+        view: AppWidgetHostView?,
+        appWidgetId: Int,
+        spanX: Int,
+        spanY: Int,
+        gridSpec: GridSpec,
+    ) {
+        if (view == null || appWidgetId <= 0) return
+        safeSystemCall {
+            val minWidth = (spanX * 70 - 16).coerceAtLeast(40)
+            val minHeight = (spanY * 70 - 16).coerceAtLeast(40)
+            val maxWidth = spanX * 70
+            val maxHeight = spanY * 70
+            val options = Bundle().apply {
+                putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, minWidth)
+                putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, minHeight)
+                putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, maxWidth)
+                putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, maxHeight)
+            }
+            view.updateAppWidgetSize(options, minWidth, minHeight, maxWidth, maxHeight)
+            appWidgetManager?.updateAppWidgetOptions(appWidgetId, options)
+        }
+    }
+
     fun toWidgetCandidate(
         info: AppWidgetProviderInfo,
         gridSpec: GridSpec,
     ): WidgetProviderCandidate? = safeSystemCall {
-        val density = context.resources.displayMetrics.density.coerceAtLeast(1f)
-        val pm = context.packageManager
+        val ctx = context ?: return@safeSystemCall null
+        val density = ctx.resources.displayMetrics.density.coerceAtLeast(1f)
+        val pm = ctx.packageManager
         val providerComp = info.provider ?: return@safeSystemCall null
         val profile = info.profile
         val serial = userManager?.getSerialNumberForUser(profile) ?: 0L
@@ -200,7 +228,7 @@ class AppWidgetHostManager @Inject constructor(
         val appLabel = pm.getApplicationLabel(appInfo).toString()
         val widgetLabel = info.loadLabel(pm)?.toString().takeUnless { it.isNullOrBlank() } ?: appLabel
         val description = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            info.loadDescription(context)?.toString().orEmpty()
+            info.loadDescription(ctx)?.toString().orEmpty()
         } else {
             ""
         }
@@ -271,9 +299,9 @@ class AppWidgetHostManager @Inject constructor(
         )
     }.getOrNull()
 
-    suspend fun listInstalledProviders(gridSpec: GridSpec): List<WidgetProviderCandidate> =
-        withContext(dispatchers.io) {
-            val providers = safeSystemCall { appWidgetManager.installedProviders.orEmpty() }
+    open suspend fun listInstalledProviders(gridSpec: GridSpec): List<WidgetProviderCandidate> =
+        withContext(dispatchers?.io ?: Dispatchers.IO) {
+            val providers = safeSystemCall { appWidgetManager?.installedProviders.orEmpty() }
                 .getOrNull()
                 .orEmpty()
 
@@ -287,7 +315,8 @@ class AppWidgetHostManager @Inject constructor(
         val cacheKey = "preview_" + candidate.provider.asCompactKey()
         previewCache.get(cacheKey)?.let { return it }
 
-        val providers = safeSystemCall { appWidgetManager.installedProviders.orEmpty() }
+        val ctx = context ?: return null
+        val providers = safeSystemCall { appWidgetManager?.installedProviders.orEmpty() }
             .getOrNull()
             .orEmpty()
         val info = providers.firstOrNull {
@@ -296,7 +325,7 @@ class AppWidgetHostManager @Inject constructor(
         } ?: return null
 
         val drawable = safeSystemCall {
-            info.loadPreviewImage(context, 0) ?: info.loadIcon(context, 0)
+            info.loadPreviewImage(ctx, 0) ?: info.loadIcon(ctx, 0)
         }.getOrNull() ?: return null
 
         return safeSystemCall {
@@ -318,8 +347,9 @@ class AppWidgetHostManager @Inject constructor(
         val cacheKey = "icon_" + candidate.provider.packageName
         previewCache.get(cacheKey)?.let { return it }
 
+        val ctx = context ?: return null
         val drawable = safeSystemCall {
-            context.packageManager.getApplicationIcon(candidate.provider.packageName)
+            ctx.packageManager.getApplicationIcon(candidate.provider.packageName)
         }.getOrNull() ?: return null
 
         return safeSystemCall {

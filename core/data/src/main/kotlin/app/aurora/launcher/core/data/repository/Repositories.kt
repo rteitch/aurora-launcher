@@ -30,7 +30,8 @@ interface AppCatalogRepository {
     val allApps: Flow<List<AppEntry>>
     val recentlyAddedApps: Flow<List<AppEntry>>
     val frequentlyUsedApps: Flow<List<AppEntry>>
-    suspend fun syncInstalledApps(installed: List<AppEntry>)
+    val isPrivateSpaceLocked: Flow<Boolean> get() = kotlinx.coroutines.flow.flowOf(false)
+    suspend fun syncInstalledApps(installed: List<AppEntry>, isPrivateSpaceLocked: Boolean = false)
     suspend fun purgePrivateSpaceApps()
     suspend fun recordAppLaunch(key: ComponentKey, epochMs: Long = System.currentTimeMillis())
     suspend fun setAppHidden(key: ComponentKey, hidden: Boolean)
@@ -45,6 +46,7 @@ interface WorkspaceRepository {
     suspend fun applyDrop(snapshot: WorkspaceSnapshot, resolution: DropResolution)
     suspend fun addAppToHome(component: ComponentKey, gridSpec: GridSpec): Boolean
     suspend fun removeItemFromHome(itemId: ItemId): List<AppWidgetId>
+    suspend fun extractChildFromFolder(childItemId: ItemId): Boolean
     suspend fun renameFolder(folderId: ItemId, newTitle: String)
     suspend fun placeWidget(
         candidate: WidgetProviderCandidate,

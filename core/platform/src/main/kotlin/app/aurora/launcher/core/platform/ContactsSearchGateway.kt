@@ -28,10 +28,9 @@ data class QuickSettingShortcut(
     val keywords: List<String>,
 )
 
-@Singleton
-class ContactsAndSettingsSearchGateway @Inject constructor(
-    @ApplicationContext private val context: Context,
-    private val dispatchers: AuroraDispatchers,
+open class ContactsAndSettingsSearchGateway(
+    private val context: Context? = null,
+    private val dispatchers: AuroraDispatchers? = null,
 ) {
     private val settingsShortcuts = listOf(
         QuickSettingShortcut("wifi", Settings.ACTION_WIFI_SETTINGS, listOf("wifi", "wi-fi", "internet", "jaringan")),
@@ -44,11 +43,12 @@ class ContactsAndSettingsSearchGateway @Inject constructor(
         QuickSettingShortcut("security", Settings.ACTION_SECURITY_SETTINGS, listOf("security", "keamanan", "biometrik")),
     )
 
-    fun isContactsPermissionDeclaredInPackage(): Boolean {
+    open fun isContactsPermissionDeclaredInPackage(): Boolean {
+        val ctx = context ?: return false
         val requested = safeSystemCall {
             @Suppress("DEPRECATION")
-            val pkgInfo = context.packageManager.getPackageInfo(
-                context.packageName,
+            val pkgInfo = ctx.packageManager.getPackageInfo(
+                ctx.packageName,
                 PackageManager.GET_PERMISSIONS,
             )
             pkgInfo.requestedPermissions?.toSet().orEmpty()
@@ -56,18 +56,20 @@ class ContactsAndSettingsSearchGateway @Inject constructor(
         return isContactsSupported(requested)
     }
 
-    fun hasContactsPermission(): Boolean {
+    open fun hasContactsPermission(): Boolean {
         if (!isContactsPermissionDeclaredInPackage()) return false
+        val ctx = context ?: return false
         return ContextCompat.checkSelfPermission(
-            context,
+            ctx,
             Manifest.permission.READ_CONTACTS,
         ) == PackageManager.PERMISSION_GRANTED
     }
 
-    suspend fun searchContacts(query: String, limit: Int = 6): List<ContactSearchResult> =
-        withContext(dispatchers.io) {
+    open suspend fun searchContacts(query: String, limit: Int = 6): List<ContactSearchResult> =
+        withContext(dispatchers?.io ?: kotlinx.coroutines.Dispatchers.IO) {
             val trimmed = query.trim()
             if (trimmed.isEmpty() || !hasContactsPermission()) return@withContext emptyList()
+            val ctx = context ?: return@withContext emptyList()
 
             safeSystemCall {
                 val filterUri = Uri.withAppendedPath(
@@ -80,7 +82,7 @@ class ContactsAndSettingsSearchGateway @Inject constructor(
                     ContactsContract.Contacts.DISPLAY_NAME_PRIMARY,
                 )
                 val results = ArrayList<ContactSearchResult>()
-                context.contentResolver.query(
+                ctx.contentResolver.query(
                     filterUri,
                     projection,
                     null,
@@ -111,7 +113,7 @@ class ContactsAndSettingsSearchGateway @Inject constructor(
             }.getOrNull().orEmpty()
         }
 
-    fun matchSystemSettings(query: String): List<QuickSettingShortcut> {
+    open fun matchSystemSettings(query: String): List<QuickSettingShortcut> {
         val trimmed = query.trim().lowercase()
         if (trimmed.length < 2) return emptyList()
         return settingsShortcuts.filter { item ->
@@ -119,22 +121,24 @@ class ContactsAndSettingsSearchGateway @Inject constructor(
         }
     }
 
-    fun openContact(lookupUri: String): SystemResult<Unit> {
+    open fun openContact(lookupUri: String): SystemResult<Unit> {
+        val ctx = context ?: return SystemResult.Failure("No context available")
         return safeSystemCall {
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(lookupUri)).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            context.startActivity(intent)
+            ctx.startActivity(intent)
         }
     }
 
-    fun openSystemSetting(action: String): SystemResult<Unit> {
+    open fun openSystemSetting(action: String): SystemResult<Unit> {
+        val ctx = context ?: return SystemResult.Failure("No context available")
         return safeSystemCall {
             val intent = Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            if (intent.resolveActivity(context.packageManager) != null) {
-                context.startActivity(intent)
+            if (intent.resolveActivity(ctx.packageManager) != null) {
+                ctx.startActivity(intent)
             } else {
-                context.startActivity(
+                ctx.startActivity(
                     Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                 )
             }

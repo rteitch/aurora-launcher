@@ -11,6 +11,8 @@ import app.aurora.launcher.core.model.ComponentKey
 import app.aurora.launcher.core.model.LibraryGroup
 import app.aurora.launcher.core.model.ProfileBadge
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -40,7 +42,11 @@ class AppCatalogRepositoryImpl @Inject constructor(
             .take(8)
     }
 
-    override suspend fun syncInstalledApps(installed: List<AppEntry>) {
+    private val _isPrivateSpaceLocked = MutableStateFlow(false)
+    override val isPrivateSpaceLocked: Flow<Boolean> = _isPrivateSpaceLocked.asStateFlow()
+
+    override suspend fun syncInstalledApps(installed: List<AppEntry>, isPrivateSpaceLocked: Boolean) {
+        _isPrivateSpaceLocked.value = isPrivateSpaceLocked
         database.withTransaction {
             val existingByKey = dao.getApps().associateBy {
                 ComponentKey(it.packageName, it.activityClass, it.userSerial)

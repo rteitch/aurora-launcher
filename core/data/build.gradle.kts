@@ -11,6 +11,7 @@ android {
 
 dependencies {
     api(project(":core:model"))
+    api(project(":core:platform"))
     implementation(project(":core:common"))
     implementation(libs.datastore.preferences)
     implementation(libs.kotlinx.serialization.json)
@@ -19,4 +20,5 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
     testImplementation(libs.room.testing)
+    testImplementation(project(":core:testing"))
 }

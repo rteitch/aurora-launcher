@@ -161,6 +161,8 @@
     <string name="biometric_prompt_title">Unlock %1$s</string>
     <string name="biometric_prompt_subtitle">Verify your identity to open this locked app</string>
     <string name="biometric_unavailable_notice">Set up a screen lock PIN or fingerprint in Android Settings first.</string>
+    <string name="private_space_locked_title">Private Space</string>
+    <string name="private_space_locked_desc">Tap to unlock hidden private apps</string>
 
     <!-- Pin Request Activity (section 8.3 & 11.3) -->
     <string name="pin_request_title">Add shortcut to Home?</string>

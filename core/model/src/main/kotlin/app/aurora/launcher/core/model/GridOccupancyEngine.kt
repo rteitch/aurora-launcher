@@ -89,6 +89,31 @@ object GridOccupancyEngine {
         return grid
     }
 
+    fun buildOccupancyBitmask(
+        items: List<WorkspaceItem>,
+        columns: Int,
+        rows: Int,
+        ignoreItemId: ItemId? = null,
+    ): Long {
+        if (columns * rows > 64) return 0L
+        var mask = 0L
+        for (item in items) {
+            if (item.id == ignoreItemId) continue
+            val (cellX, cellY, spanX, spanY) = itemDesktopBounds(item) ?: continue
+            for (dy in 0 until spanY) {
+                val y = cellY + dy
+                if (y !in 0 until rows) continue
+                for (dx in 0 until spanX) {
+                    val x = cellX + dx
+                    if (x in 0 until columns) {
+                        mask = mask or (1L shl (y * columns + x))
+                    }
+                }
+            }
+        }
+        return mask
+    }
+
     fun canFit(
         items: List<WorkspaceItem>,
         columns: Int,
@@ -101,6 +126,18 @@ object GridOccupancyEngine {
     ): Boolean {
         if (cellX < 0 || cellY < 0 || spanX <= 0 || spanY <= 0) return false
         if (cellX + spanX > columns || cellY + spanY > rows) return false
+        if (columns * rows <= 64) {
+            val occupiedMask = buildOccupancyBitmask(items, columns, rows, ignoreItemId)
+            var targetMask = 0L
+            for (dy in 0 until spanY) {
+                val y = cellY + dy
+                for (dx in 0 until spanX) {
+                    val x = cellX + dx
+                    targetMask = targetMask or (1L shl (y * columns + x))
+                }
+            }
+            return (occupiedMask and targetMask) == 0L
+        }
         val grid = buildOccupancyGrid(items, columns, rows, ignoreItemId)
         for (dy in 0 until spanY) {
             for (dx in 0 until spanX) {
@@ -119,6 +156,23 @@ object GridOccupancyEngine {
         ignoreItemId: ItemId? = null,
     ): Pair<Int, Int>? {
         if (spanX > columns || spanY > rows) return null
+        if (columns * rows <= 64) {
+            val occupiedMask = buildOccupancyBitmask(items, columns, rows, ignoreItemId)
+            for (y in 0..(rows - spanY)) {
+                for (x in 0..(columns - spanX)) {
+                    var targetMask = 0L
+                    for (dy in 0 until spanY) {
+                        for (dx in 0 until spanX) {
+                            targetMask = targetMask or (1L shl ((y + dy) * columns + (x + dx)))
+                        }
+                    }
+                    if ((occupiedMask and targetMask) == 0L) {
+                        return x to y
+                    }
+                }
+            }
+            return null
+        }
         val grid = buildOccupancyGrid(items, columns, rows, ignoreItemId)
         for (y in 0..(rows - spanY)) {
             for (x in 0..(columns - spanX)) {
