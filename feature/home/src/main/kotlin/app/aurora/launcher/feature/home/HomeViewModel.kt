@@ -243,10 +243,11 @@ class HomeViewModel @Inject constructor(
         pushUndo(snapshot)
 
         viewModelScope.launch {
-            workspaceRepository.applyDrop(snapshot, resolution)
-            if (uiState.value.settings.autoReflowGrid) {
-                workspaceRepository.packWorkspace(snapshot.gridSpec)
-            }
+            workspaceRepository.applyDropAndPack(
+                snapshot = snapshot,
+                resolution = resolution,
+                autoReflow = uiState.value.settings.autoReflowGrid,
+            )
         }
     }
 

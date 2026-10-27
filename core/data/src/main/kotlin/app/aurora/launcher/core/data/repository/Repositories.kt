@@ -44,6 +44,7 @@ interface WorkspaceRepository {
     val snapshots: Flow<List<SnapshotSummary>>
     suspend fun seedInitialWorkspaceIfEmpty(installedApps: List<AppEntry>, gridSpec: GridSpec)
     suspend fun applyDrop(snapshot: WorkspaceSnapshot, resolution: DropResolution)
+    suspend fun applyDropAndPack(snapshot: WorkspaceSnapshot, resolution: DropResolution, autoReflow: Boolean)
     suspend fun addAppToHome(component: ComponentKey, gridSpec: GridSpec): Boolean
     suspend fun removeItemFromHome(itemId: ItemId): List<AppWidgetId>
     suspend fun extractChildFromFolder(childItemId: ItemId): Boolean

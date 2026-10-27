@@ -1,6 +1,7 @@
 package app.aurora.launcher
 
 import android.content.Intent
+import android.graphics.Rect
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -163,8 +164,12 @@ private fun LauncherShell(
         )
     }
 
+    val launchWithBoundsHandler: (ComponentKey, Rect?) -> Unit = { key, bounds ->
+        launchTargetHandler(LaunchTarget.Component(key, bounds))
+    }
+
     val launchHandler: (ComponentKey) -> Unit = { key ->
-        launchTargetHandler(LaunchTarget.Component(key))
+        launchWithBoundsHandler(key, null)
     }
 
     AuroraLauncherTheme(
@@ -245,7 +250,7 @@ private fun LauncherShell(
                             runCatching { roleLauncher.launch(intent) }
                         }
                     },
-                    onLaunchApp = launchHandler,
+                    onLaunchApp = launchWithBoundsHandler,
                     onLaunchShortcut = launchTargetHandler,
                     onOpenFolder = viewModel::openFolder,
                     onOpenSpotlight = viewModel::openSpotlight,

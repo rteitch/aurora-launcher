@@ -1,6 +1,8 @@
 package app.aurora.launcher.core.platform
 
+import android.app.Activity
 import android.app.ActivityOptions
+import android.app.Application
 import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
@@ -13,6 +15,7 @@ import android.content.pm.PackageManager
 import android.graphics.Rect
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.Process
@@ -34,6 +37,7 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.withContext
+import java.lang.ref.WeakReference
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -49,6 +53,72 @@ open class LauncherAppsGateway(
 ) {
     private val launcherApps = context?.getSystemService(LauncherApps::class.java)
     private val userManager = context?.getSystemService(UserManager::class.java)
+
+    private var activeRootView: WeakReference<android.view.View>? = null
+    private var currentActivityRef: WeakReference<Activity>? = null
+
+    init {
+        (context as? Application)?.registerActivityLifecycleCallbacks(
+            object : Application.ActivityLifecycleCallbacks {
+                override fun onActivityResumed(activity: Activity) {
+                    currentActivityRef = WeakReference(activity)
+                }
+
+                override fun onActivityPaused(activity: Activity) {
+                    if (currentActivityRef?.get() == activity) {
+                        currentActivityRef = null
+                    }
+                }
+
+                override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
+                override fun onActivityStarted(activity: Activity) {}
+                override fun onActivityStopped(activity: Activity) {}
+                override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
+                override fun onActivityDestroyed(activity: Activity) {
+                    if (currentActivityRef?.get() == activity) {
+                        currentActivityRef = null
+                    }
+                }
+            },
+        )
+    }
+
+    open fun attachRootView(view: android.view.View) {
+        activeRootView = WeakReference(view)
+    }
+
+    open fun detachRootView(view: android.view.View) {
+        if (activeRootView?.get() == view) {
+            activeRootView = null
+        }
+    }
+
+    private fun buildTransitionOptions(sourceBounds: Rect?): Bundle? {
+        if (sourceBounds == null || sourceBounds.width() <= 0 || sourceBounds.height() <= 0) {
+            return null
+        }
+        val targetView = activeRootView?.get()
+            ?: currentActivityRef?.get()?.window?.decorView
+        return if (targetView != null && targetView.isAttachedToWindow) {
+            ActivityOptions.makeScaleUpAnimation(
+                targetView,
+                sourceBounds.left,
+                sourceBounds.top,
+                sourceBounds.width(),
+                sourceBounds.height(),
+            ).toBundle()
+        } else if (context != null) {
+            ActivityOptions.makeClipRevealAnimation(
+                android.view.View(context),
+                sourceBounds.left,
+                sourceBounds.top,
+                sourceBounds.width(),
+                sourceBounds.height(),
+            ).toBundle()
+        } else {
+            null
+        }
+    }
 
     open val catalogInvalidations: Flow<Set<String>> = if (context == null) kotlinx.coroutines.flow.emptyFlow() else callbackFlow {
         val mainHandler = Handler(Looper.getMainLooper())
@@ -182,17 +252,7 @@ open class LauncherAppsGateway(
                 throw IllegalStateException("Profile is paused in quiet mode")
             }
             val component = ComponentName(key.packageName, key.activityClass)
-            val options = if (context != null && sourceBounds != null && sourceBounds.width() > 0 && sourceBounds.height() > 0) {
-                ActivityOptions.makeClipRevealAnimation(
-                    android.view.View(context),
-                    sourceBounds.left,
-                    sourceBounds.top,
-                    sourceBounds.width(),
-                    sourceBounds.height(),
-                ).toBundle()
-            } else {
-                null
-            }
+            val options = buildTransitionOptions(sourceBounds)
             launcherApps?.startMainActivity(component, handle, sourceBounds, options)
                 ?: throw IllegalStateException("LauncherApps service unavailable")
         }
@@ -242,7 +302,8 @@ open class LauncherAppsGateway(
     ): SystemResult<Unit> {
         return safeSystemCall {
             val handle = resolveUserHandle(userSerial)
-            launcherApps?.startShortcut(packageName, shortcutId, sourceBounds, null, handle)
+            val options = buildTransitionOptions(sourceBounds)
+            launcherApps?.startShortcut(packageName, shortcutId, sourceBounds, options, handle)
                 ?: throw IllegalStateException("LauncherApps service unavailable")
         }
     }

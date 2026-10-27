@@ -223,6 +223,25 @@ class WorkspaceRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun applyDropAndPack(
+        snapshot: WorkspaceSnapshot,
+        resolution: DropResolution,
+        autoReflow: Boolean,
+    ) {
+        if (resolution is DropResolution.Reject) return
+        database.withTransaction {
+            saveSnapshotInternal(snapshot, reason = "Before layout edit")
+            val updated = applyDropToSnapshot(snapshot, resolution)
+            val normalized = GridOccupancyEngine.normalizeSnapshot(updated)
+            val finalSnapshot = if (autoReflow) {
+                GridOccupancyEngine.packWorkspace(normalized)
+            } else {
+                normalized
+            }
+            persistSnapshotInternal(finalSnapshot)
+        }
+    }
+
     override suspend fun addAppToHome(component: ComponentKey, gridSpec: GridSpec): Boolean {
         return database.withTransaction {
             val current = loadCurrentSnapshot(gridSpec)

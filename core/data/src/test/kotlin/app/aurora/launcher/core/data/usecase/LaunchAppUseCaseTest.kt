@@ -148,4 +148,22 @@ class LaunchAppUseCaseTest {
         assertTrue(executed is LaunchAppResult.Success)
         assertEquals(listOf(Triple(lockedKey.packageName, "transfer", 0L)), gateway.launchedShortcuts)
     }
+
+    @Test
+    fun `executeLaunch preserves and forwards sourceBounds for smooth window transitions`() = runTest {
+        val appCatalog = FakeAppCatalogRepository(listOf(normalApp))
+        val settingsRepo = FakeSettingsRepository()
+        val gateway = FakeLauncherAppsGateway()
+        val useCase = LaunchAppUseCase(appCatalog, settingsRepo, gateway)
+
+        val expectedBounds = android.graphics.Rect(100, 200, 300, 400)
+        val target = LaunchTarget.Component(sampleKey, sourceBounds = expectedBounds)
+
+        val result = useCase.executeLaunch(target)
+
+        assertTrue(result is LaunchAppResult.Success)
+        assertEquals(listOf(sampleKey), gateway.launchedActivities)
+        assertEquals(1, gateway.launchedBounds.size)
+        assertTrue(gateway.launchedBounds.first() === expectedBounds)
+    }
 }

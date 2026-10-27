@@ -170,7 +170,7 @@ fun HomeScreen(
     badgeCounts: Map<String, Int>,
     homeButtonSignal: Int,
     onRequestSetDefaultHome: () -> Unit,
-    onLaunchApp: (ComponentKey) -> Unit,
+    onLaunchApp: (ComponentKey, android.graphics.Rect?) -> Unit,
     onLaunchShortcut: (LaunchTarget) -> Unit = {},
     onOpenFolder: (ItemId) -> Unit,
     onOpenSpotlight: () -> Unit,
@@ -850,7 +850,13 @@ fun HomeScreen(
                                                         if (item.orphanSinceEpochMs != null && entry == null) {
                                                             onShowMessage(orphanNotice)
                                                         } else {
-                                                            onLaunchApp(item.component)
+                                                            val srcRect = android.graphics.Rect(
+                                                                itemBoundsInWindow.left.toInt(),
+                                                                itemBoundsInWindow.top.toInt(),
+                                                                itemBoundsInWindow.right.toInt(),
+                                                                itemBoundsInWindow.bottom.toInt(),
+                                                            )
+                                                            onLaunchApp(item.component, srcRect)
                                                         }
                                                     },
                                                     onLongClick = {
@@ -876,7 +882,15 @@ fun HomeScreen(
                                                     useWallpaperScrimForLabel = true,
                                                     accessibilityActions = a11yActions,
                                                     onClick = {
-                                                        if (!isEditMode) onLaunchShortcut(LaunchTarget.Pinned(item))
+                                                        if (!isEditMode) {
+                                                            val srcRect = android.graphics.Rect(
+                                                                itemBoundsInWindow.left.toInt(),
+                                                                itemBoundsInWindow.top.toInt(),
+                                                                itemBoundsInWindow.right.toInt(),
+                                                                itemBoundsInWindow.bottom.toInt(),
+                                                            )
+                                                            onLaunchShortcut(LaunchTarget.Pinned(item, srcRect))
+                                                        }
                                                     },
                                                     onLongClick = {
                                                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -1205,7 +1219,15 @@ fun HomeScreen(
                                                 },
                                             ),
                                             onClick = {
-                                                if (!isEditMode) onLaunchApp(dockItem.component)
+                                                if (!isEditMode) {
+                                                    val srcRect = android.graphics.Rect(
+                                                        dockBoundsInItem.left.toInt(),
+                                                        dockBoundsInItem.top.toInt(),
+                                                        dockBoundsInItem.right.toInt(),
+                                                        dockBoundsInItem.bottom.toInt(),
+                                                    )
+                                                    onLaunchApp(dockItem.component, srcRect)
+                                                }
                                             },
                                             onLongClick = {
                                                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -1284,12 +1306,13 @@ fun HomeScreen(
             }
 
             val halfExclusionPx = with(density) { 100.dp.toPx() }
-            val exclusionTopPx = (draggedWindowPos.y - halfExclusionPx).coerceAtLeast(0f)
-            val exclusionTopDp = with(density) { exclusionTopPx.toDp() }
             Box(
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .offset(x = 0.dp, y = exclusionTopDp)
+                    .offset {
+                        val top = (draggedWindowPos.y - halfExclusionPx).coerceAtLeast(0f).roundToInt()
+                        IntOffset(0, top)
+                    }
                     .width(48.dp)
                     .height(200.dp)
                     .systemGestureExclusion(),
@@ -1297,7 +1320,10 @@ fun HomeScreen(
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .offset(x = 0.dp, y = exclusionTopDp)
+                    .offset {
+                        val top = (draggedWindowPos.y - halfExclusionPx).coerceAtLeast(0f).roundToInt()
+                        IntOffset(0, top)
+                    }
                     .width(48.dp)
                     .height(200.dp)
                     .systemGestureExclusion(),
@@ -1396,7 +1422,15 @@ fun HomeScreen(
                                     .background(palette.surfaceVariant)
                                     .clickable {
                                         viewModel.dismissQuickActions()
-                                        onLaunchShortcut(LaunchTarget.Dynamic(sc))
+                                        val srcRect = qaAnchorBounds?.let { b ->
+                                            android.graphics.Rect(
+                                                b.left.toInt(),
+                                                b.top.toInt(),
+                                                b.right.toInt(),
+                                                b.bottom.toInt(),
+                                            )
+                                        }
+                                        onLaunchShortcut(LaunchTarget.Dynamic(sc, srcRect))
                                     }
                                     .padding(horizontal = AuroraSpacing.sm),
                             ) {

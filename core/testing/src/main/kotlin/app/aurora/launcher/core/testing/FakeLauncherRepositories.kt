@@ -122,7 +122,20 @@ class FakeWorkspaceRepository(
         }
     }
 
+    var dropAndPackCallCount = 0
+
     override suspend fun applyDrop(snapshot: WorkspaceSnapshot, resolution: DropResolution) {}
+    override suspend fun applyDropAndPack(
+        snapshot: WorkspaceSnapshot,
+        resolution: DropResolution,
+        autoReflow: Boolean,
+    ) {
+        dropAndPackCallCount++
+        applyDrop(snapshot, resolution)
+        if (autoReflow) {
+            packWorkspace(snapshot.gridSpec)
+        }
+    }
     override suspend fun addAppToHome(component: ComponentKey, gridSpec: GridSpec): Boolean = true
     override suspend fun removeItemFromHome(itemId: ItemId): List<AppWidgetId> = emptyList()
     override suspend fun extractChildFromFolder(childItemId: ItemId): Boolean {
@@ -232,9 +245,11 @@ class FakeBackupRepository : BackupRepository {
 class FakeLauncherAppsGateway(
     val launchedActivities: MutableList<ComponentKey> = mutableListOf(),
     val launchedShortcuts: MutableList<Triple<String, String, Long>> = mutableListOf(),
+    val launchedBounds: MutableList<android.graphics.Rect?> = mutableListOf(),
 ) : app.aurora.launcher.core.platform.LauncherAppsGateway() {
     override fun launchActivity(key: ComponentKey, sourceBounds: android.graphics.Rect?): SystemResult<Unit> {
         launchedActivities.add(key)
+        launchedBounds.add(sourceBounds)
         return SystemResult.Success(Unit)
     }
 
@@ -245,6 +260,7 @@ class FakeLauncherAppsGateway(
         sourceBounds: android.graphics.Rect?,
     ): SystemResult<Unit> {
         launchedShortcuts.add(Triple(packageName, shortcutId, userSerial))
+        launchedBounds.add(sourceBounds)
         return SystemResult.Success(Unit)
     }
 

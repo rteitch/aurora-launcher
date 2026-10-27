@@ -2,6 +2,7 @@ package app.aurora.launcher.feature.home
 
 import app.aurora.launcher.core.model.AppEntry
 import app.aurora.launcher.core.model.ComponentKey
+import app.aurora.launcher.core.model.DropTarget
 import app.aurora.launcher.core.model.GridSpec
 import app.aurora.launcher.core.model.HomeUiMode
 import app.aurora.launcher.core.model.ItemId
@@ -208,5 +209,26 @@ class HomeViewModelTest {
         advanceUntilIdle()
 
         assertEquals(1, viewModel.uiState.value.workspace.pages.size)
+    }
+
+    @Test
+    fun `completeDrop invokes applyDropAndPack with atomic single transaction`() = runTest(testDispatcher) {
+        val workspaceRepo = FakeWorkspaceRepository(sampleSnapshot)
+        val viewModel = createViewModel(workspaceRepo = workspaceRepo)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect()
+        }
+        advanceUntilIdle()
+
+        val item = sampleSnapshot.pages[0].items[0]
+        viewModel.completeDrop(
+            draggedItemId = item.id,
+            target = DropTarget.DesktopCell(PageId(1L), 1, 1),
+            defaultFolderTitle = "Folder",
+            onRejected = {},
+        )
+        advanceUntilIdle()
+
+        assertTrue(workspaceRepo.dropAndPackCallCount >= 1)
     }
 }

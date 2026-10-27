@@ -1,5 +1,6 @@
 package app.aurora.launcher.core.data.usecase
 
+import android.graphics.Rect
 import app.aurora.launcher.core.common.SystemResult
 import app.aurora.launcher.core.data.repository.AppCatalogRepository
 import app.aurora.launcher.core.data.repository.LauncherSettingsRepository
@@ -13,16 +14,29 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 sealed interface LaunchTarget {
-    data class Component(val key: ComponentKey) : LaunchTarget
-    data class Pinned(val item: WorkspaceItem.PinnedShortcut) : LaunchTarget
-    data class Dynamic(val shortcut: AppShortcutItem) : LaunchTarget
-
     val packageName: String
-        get() = when (this) {
-            is Component -> key.packageName
-            is Pinned -> item.packageName
-            is Dynamic -> shortcut.packageName
-        }
+    val sourceBounds: Rect?
+
+    data class Component(
+        val key: ComponentKey,
+        override val sourceBounds: Rect? = null,
+    ) : LaunchTarget {
+        override val packageName: String get() = key.packageName
+    }
+
+    data class Pinned(
+        val item: WorkspaceItem.PinnedShortcut,
+        override val sourceBounds: Rect? = null,
+    ) : LaunchTarget {
+        override val packageName: String get() = item.packageName
+    }
+
+    data class Dynamic(
+        val shortcut: AppShortcutItem,
+        override val sourceBounds: Rect? = null,
+    ) : LaunchTarget {
+        override val packageName: String get() = shortcut.packageName
+    }
 }
 
 sealed interface LaunchAppResult {
@@ -66,16 +80,18 @@ class LaunchAppUseCase @Inject constructor(
         cachedEntry: AppEntry? = null,
     ): LaunchAppResult {
         val result = when (target) {
-            is LaunchTarget.Component -> launcherAppsGateway.launchActivity(target.key)
+            is LaunchTarget.Component -> launcherAppsGateway.launchActivity(target.key, target.sourceBounds)
             is LaunchTarget.Pinned -> launcherAppsGateway.launchShortcut(
                 packageName = target.item.packageName,
                 shortcutId = target.item.shortcutId,
                 userSerial = target.item.userSerial,
+                sourceBounds = target.sourceBounds,
             )
             is LaunchTarget.Dynamic -> launcherAppsGateway.launchShortcut(
                 packageName = target.shortcut.packageName,
                 shortcutId = target.shortcut.id,
                 userSerial = target.shortcut.userSerial,
+                sourceBounds = target.sourceBounds,
             )
         }
 
