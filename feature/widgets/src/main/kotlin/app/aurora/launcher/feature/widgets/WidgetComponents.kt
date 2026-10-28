@@ -737,9 +737,15 @@ fun WidgetHostSlot(
                     add(CustomAccessibilityAction(removeLabel) { onRemove(widget.id); true })
                 }
             }
-            .combinedClickable(
-                onClick = {},
-                onLongClick = onLongPressEnterEdit,
+            .then(
+                if (isEditMode) {
+                    Modifier
+                } else {
+                    Modifier.combinedClickable(
+                        onClick = {},
+                        onLongClick = onLongPressEnterEdit,
+                    )
+                }
             ),
     ) {
         if (widget.status == WidgetStatus.PROVIDER_MISSING || widget.status == WidgetStatus.ERROR) {
@@ -1120,6 +1126,7 @@ fun WidgetStackSlot(
     ) {
         VerticalPager(
             state = pagerState,
+            userScrollEnabled = !isEditMode && !isDragging,
             modifier = Modifier.fillMaxSize(),
         ) { pageIdx ->
             val childWidget = stack.widgets.getOrNull(pageIdx)

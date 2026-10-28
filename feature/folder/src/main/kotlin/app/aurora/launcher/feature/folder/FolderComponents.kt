@@ -36,6 +36,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -43,6 +44,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -109,6 +111,7 @@ fun FolderTilePreview(
     accessibilityActions: List<CustomAccessibilityAction> = emptyList(),
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
+    onRemoveClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val palette = AuroraTheme.palette
@@ -132,6 +135,15 @@ fun FolderTilePreview(
         0f
     }
 
+    val folderClickModifier = if (isEditMode) {
+        Modifier
+    } else {
+        Modifier.combinedClickable(
+            onClick = onClick,
+            onLongClick = onLongClick,
+        )
+    }
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
@@ -147,55 +159,76 @@ fun FolderTilePreview(
                     customActions = accessibilityActions
                 }
             }
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongClick,
-            )
+            .then(folderClickModifier)
             .padding(2.dp),
     ) {
         Box(
             contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .size(iconSize)
-                .graphicsLayer { rotationZ = rotationDeg }
-                .clip(shape)
-                .background(palette.surfaceVariant.copy(alpha = 0.92f))
-                .border(1.dp, palette.glassHairline.copy(alpha = 0.45f), shape)
-                .padding(6.dp),
         ) {
-            val previewChildren = remember(folder.children) { folder.children.take(9) }
-            val cellSize = (iconSize - 18.dp) / 3f
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                for (row in 0 until 3) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                        for (col in 0 until 3) {
-                            val idx = row * 3 + col
-                            val child = previewChildren.getOrNull(idx)
-                            Box(
-                                modifier = Modifier
-                                    .size(cellSize)
-                                    .clip(RoundedCornerShape(4.dp)),
-                            ) {
-                                if (child != null) {
-                                    val bmp = rememberAppIcon(iconLoader, child.component, iconPackPackage)
-                                    if (bmp != null) {
-                                        Image(
-                                            bitmap = bmp,
-                                            contentDescription = null,
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier.fillMaxSize(),
-                                        )
-                                    } else {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .background(palette.accent.copy(alpha = 0.35f)),
-                                        )
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(iconSize)
+                    .graphicsLayer { rotationZ = rotationDeg }
+                    .clip(shape)
+                    .background(palette.surfaceVariant.copy(alpha = 0.92f))
+                    .border(1.dp, palette.glassHairline.copy(alpha = 0.45f), shape)
+                    .padding(6.dp),
+            ) {
+                val previewChildren = remember(folder.children) { folder.children.take(9) }
+                val cellSize = (iconSize - 18.dp) / 3f
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    for (row in 0 until 3) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                            for (col in 0 until 3) {
+                                val idx = row * 3 + col
+                                val child = previewChildren.getOrNull(idx)
+                                Box(
+                                    modifier = Modifier
+                                        .size(cellSize)
+                                        .clip(RoundedCornerShape(4.dp)),
+                                ) {
+                                    if (child != null) {
+                                        val bmp = rememberAppIcon(iconLoader, child.component, iconPackPackage)
+                                        if (bmp != null) {
+                                            Image(
+                                                bitmap = bmp,
+                                                contentDescription = null,
+                                                contentScale = ContentScale.Crop,
+                                                modifier = Modifier.fillMaxSize(),
+                                            )
+                                        } else {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(palette.accent.copy(alpha = 0.35f)),
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
                     }
+                }
+            }
+
+            if (isEditMode && onRemoveClick != null) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .size(22.dp)
+                        .clip(CircleShape)
+                        .background(palette.surface)
+                        .border(1.dp, palette.outline, CircleShape)
+                        .clickable(onClick = onRemoveClick),
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Remove,
+                        contentDescription = null,
+                        tint = palette.onSurface,
+                        modifier = Modifier.size(14.dp),
+                    )
                 }
             }
         }

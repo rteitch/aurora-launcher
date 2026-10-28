@@ -258,7 +258,7 @@ private fun LauncherShell(
                     onOpenWidgetPicker = viewModel::openWidgetPicker,
                     onOpenSettings = viewModel::openSettings,
                     onShowMessage = viewModel::showMessage,
-                    folderTileSlot = { folder, iconSize, showLabel, isEditMode, scrim, a11y, onClick, onLongClick, mod ->
+                    folderTileSlot = { folder, iconSize, showLabel, isEditMode, scrim, a11y, onClick, onLongClick, onRemoveClick ->
                         FolderTilePreview(
                             folder = folder,
                             iconSize = iconSize,
@@ -271,7 +271,7 @@ private fun LauncherShell(
                             accessibilityActions = a11y,
                             onClick = onClick,
                             onLongClick = onLongClick,
-                            modifier = mod,
+                            onRemoveClick = onRemoveClick,
                         )
                     },
                     widgetSlot = { widget, isEditMode, isDragging, onEnterEdit, mod ->

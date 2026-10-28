@@ -22,6 +22,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -187,7 +188,7 @@ fun HomeScreen(
         a11yActions: List<CustomAccessibilityAction>,
         onClick: () -> Unit,
         onLongClick: () -> Unit,
-        modifier: Modifier,
+        onRemoveClick: (() -> Unit)?,
     ) -> Unit,
     widgetSlot: @Composable (
         widget: WorkspaceItem.Widget,
@@ -438,7 +439,7 @@ fun HomeScreen(
         HorizontalPager(
             state = pagerState,
             beyondViewportPageCount = 1,
-            userScrollEnabled = !isDragging,
+            userScrollEnabled = !isEditMode && !isDragging,
             modifier = Modifier.fillMaxSize(),
         ) { pageIndex ->
             if (showAppLibrary && pageIndex == workspacePages.size) {
@@ -467,6 +468,25 @@ fun HomeScreen(
                                 }
                             },
                         )
+                        .pointerInput(isEditMode, totalPagerPages) {
+                            if (!isEditMode) return@pointerInput
+                            var totalDx = 0f
+                            detectHorizontalDragGestures(
+                                onDragStart = { totalDx = 0f },
+                                onHorizontalDrag = { change, dragAmount ->
+                                    change.consume()
+                                    totalDx += dragAmount
+                                },
+                                onDragEnd = {
+                                    val threshold = 36.dp.toPx()
+                                    if (totalDx < -threshold && pagerState.currentPage < totalPagerPages - 1) {
+                                        scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
+                                    } else if (totalDx > threshold && pagerState.currentPage > 0) {
+                                        scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
+                                    }
+                                },
+                            )
+                        }
                         .padding(
                             start = AuroraSpacing.workspaceHorizontalMargin,
                             end = AuroraSpacing.workspaceHorizontalMargin,
@@ -916,7 +936,7 @@ fun HomeScreen(
                                                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                                         viewModel.enterEditMode()
                                                     },
-                                                    Modifier,
+                                                    { viewModel.removeItemFromHome(item.id) },
                                                 )
                                             }
 
@@ -1258,7 +1278,7 @@ fun HomeScreen(
                                                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                                 viewModel.enterEditMode()
                                             },
-                                            Modifier,
+                                            { viewModel.removeItemFromHome(dockItem.id) },
                                         )
                                     }
 
@@ -1277,6 +1297,10 @@ fun HomeScreen(
         // Floating ghost preview while dragging an item
         if (activeDrag != null) {
             val ghostSizePx = with(density) { 64.dp.toPx() }
+            val draggedItem = remember(activeDrag.draggedItemId, state.workspace) {
+                state.workspace.pages.flatMap { it.items }.firstOrNull { it.id == activeDrag.draggedItemId }
+                    ?: state.workspace.dockItems.firstOrNull { it.id == activeDrag.draggedItemId }
+            }
             val draggedAppEntry = activeDrag.sourceComponent?.let { state.catalogByKey[it] }
             val ghostBmp = activeDrag.sourceComponent?.let {
                 rememberAppIcon(viewModel.iconLoader, it, state.settings.selectedIconPackPackage)
@@ -1295,14 +1319,31 @@ fun HomeScreen(
                         alpha = 0.9f
                     },
             ) {
-                AppIconTile(
-                    label = draggedAppEntry?.label.orEmpty(),
-                    iconBitmap = ghostBmp,
-                    iconSize = 60.dp,
-                    showLabel = false,
-                    iconShape = state.settings.iconShape,
-                    onClick = {},
-                )
+                when (draggedItem) {
+                    is WorkspaceItem.Folder -> {
+                        folderTileSlot(
+                            draggedItem,
+                            60.dp,
+                            false,
+                            false,
+                            false,
+                            emptyList(),
+                            {},
+                            {},
+                            null,
+                        )
+                    }
+                    else -> {
+                        AppIconTile(
+                            label = draggedAppEntry?.label.orEmpty(),
+                            iconBitmap = ghostBmp,
+                            iconSize = 60.dp,
+                            showLabel = false,
+                            iconShape = state.settings.iconShape,
+                            onClick = {},
+                        )
+                    }
+                }
             }
 
             val halfExclusionPx = with(density) { 100.dp.toPx() }
@@ -1967,6 +2008,7 @@ private fun SmartGlanceHeader(
                 modifier = Modifier
                     .clip(RoundedCornerShape(8.dp))
                     .clickable {
+                        if (isEditMode) return@clickable
                         val clockIntent = Intent(AlarmClock.ACTION_SHOW_ALARMS)
                         clockIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         runCatching { context.startActivity(clockIntent) }
@@ -2028,7 +2070,10 @@ private fun SmartGlanceHeader(
                 modifier = Modifier
                     .clip(CircleShape)
                     .background(palette.surfaceVariant)
-                    .clickable(onClick = launchGoogleWebSearch)
+                    .clickable {
+                        if (isEditMode) return@clickable
+                        launchGoogleWebSearch()
+                    }
                     .padding(horizontal = 12.dp, vertical = 6.dp),
             ) {
                 Icon(
@@ -2044,7 +2089,9 @@ private fun SmartGlanceHeader(
                     fontWeight = FontWeight.SemiBold,
                 )
                 IconButton(
-                    onClick = launchGoogleVoiceSearch,
+                    onClick = {
+                        if (!isEditMode) launchGoogleVoiceSearch()
+                    },
                     modifier = Modifier.size(24.dp),
                 ) {
                     Icon(

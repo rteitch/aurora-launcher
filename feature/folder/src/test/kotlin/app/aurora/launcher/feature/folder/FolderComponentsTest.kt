@@ -114,4 +114,14 @@ class FolderComponentsTest {
         assertEquals(folderId, renamedFolderId)
         assertEquals("Finance Apps", renamedTitle)
     }
+
+    @Test
+    fun folderRemoveCallbackInvokedInEditMode() {
+        var removedFolderId: ItemId? = null
+        val onRemoveClick: () -> Unit = {
+            removedFolderId = testFolder.id
+        }
+        onRemoveClick()
+        assertEquals(folderId, removedFolderId)
+    }
 }

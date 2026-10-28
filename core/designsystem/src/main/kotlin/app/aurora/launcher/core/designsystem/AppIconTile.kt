@@ -184,7 +184,7 @@ fun AppIconTile(
                         .clip(CircleShape)
                         .background(palette.surface)
                         .border(1.dp, palette.outline, CircleShape)
-                        .combinedClickable(onClick = onRemoveClick),
+                        .clickable(onClick = onRemoveClick),
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Remove,
