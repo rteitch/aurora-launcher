@@ -8,11 +8,14 @@ import app.aurora.launcher.core.model.LibraryGroup
 import app.aurora.launcher.core.platform.ContactsAndSettingsSearchGateway
 import app.aurora.launcher.core.platform.IconCacheAndLoader
 import app.aurora.launcher.core.testing.FakeAppCatalogRepository
+import app.aurora.launcher.core.testing.FakeLauncherAppsGateway
 import app.aurora.launcher.core.testing.FakeSearchHistoryRepository
 import app.aurora.launcher.core.testing.FakeSettingsRepository
+import app.aurora.launcher.core.testing.FakeWorkspaceRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -69,6 +72,8 @@ class SpotlightViewModelTest {
         val searchHistory = FakeSearchHistoryRepository()
         val gateway = ContactsAndSettingsSearchGateway()
         val iconLoader = IconCacheAndLoader()
+        val workspaceRepo = FakeWorkspaceRepository()
+        val launcherGateway = FakeLauncherAppsGateway()
 
         val viewModel = SpotlightViewModel(
             appCatalogRepository = appCatalog,
@@ -77,6 +82,8 @@ class SpotlightViewModelTest {
             contactsAndSettingsGateway = gateway,
             iconLoader = iconLoader,
             dispatchers = auroraDispatchers,
+            workspaceRepository = workspaceRepo,
+            launcherAppsGateway = launcherGateway,
         )
 
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
@@ -104,6 +111,8 @@ class SpotlightViewModelTest {
         val searchHistory = FakeSearchHistoryRepository(listOf("Reddit", "Twitter"))
         val gateway = ContactsAndSettingsSearchGateway()
         val iconLoader = IconCacheAndLoader()
+        val workspaceRepo = FakeWorkspaceRepository()
+        val launcherGateway = FakeLauncherAppsGateway()
 
         val viewModel = SpotlightViewModel(
             appCatalogRepository = appCatalog,
@@ -112,6 +121,8 @@ class SpotlightViewModelTest {
             contactsAndSettingsGateway = gateway,
             iconLoader = iconLoader,
             dispatchers = auroraDispatchers,
+            workspaceRepository = workspaceRepo,
+            launcherAppsGateway = launcherGateway,
         )
 
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
@@ -123,5 +134,124 @@ class SpotlightViewModelTest {
         assertEquals(2, state.recentQueries.size)
         assertTrue(state.recentQueries.contains("Reddit"))
         assertTrue(state.recentQueries.contains("Twitter"))
+    }
+
+    @Test
+    fun `addAppToWorkspace invokes workspaceRepository addAppToHome`() = runTest(testDispatcher) {
+        val appCatalog = FakeAppCatalogRepository(listOf(app1, app2))
+        val settingsRepo = FakeSettingsRepository()
+        val searchHistory = FakeSearchHistoryRepository()
+        val gateway = ContactsAndSettingsSearchGateway()
+        val iconLoader = IconCacheAndLoader()
+        val workspaceRepo = FakeWorkspaceRepository()
+        val launcherGateway = FakeLauncherAppsGateway()
+
+        val viewModel = SpotlightViewModel(
+            appCatalogRepository = appCatalog,
+            settingsRepository = settingsRepo,
+            searchHistoryRepository = searchHistory,
+            contactsAndSettingsGateway = gateway,
+            iconLoader = iconLoader,
+            dispatchers = auroraDispatchers,
+            workspaceRepository = workspaceRepo,
+            launcherAppsGateway = launcherGateway,
+        )
+
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect()
+        }
+        advanceUntilIdle()
+
+        var addResult: Boolean? = null
+        viewModel.addAppToWorkspace(app1, isTablet = false) { result ->
+            addResult = result
+        }
+        advanceUntilIdle()
+
+        assertEquals(true, addResult)
+    }
+
+    @Test
+    fun `openAppInfo delegates to launcherAppsGateway`() = runTest(testDispatcher) {
+        val appCatalog = FakeAppCatalogRepository(listOf(app1, app2))
+        val settingsRepo = FakeSettingsRepository()
+        val searchHistory = FakeSearchHistoryRepository()
+        val gateway = ContactsAndSettingsSearchGateway()
+        val iconLoader = IconCacheAndLoader()
+        val workspaceRepo = FakeWorkspaceRepository()
+        val launcherGateway = FakeLauncherAppsGateway()
+
+        val viewModel = SpotlightViewModel(
+            appCatalogRepository = appCatalog,
+            settingsRepository = settingsRepo,
+            searchHistoryRepository = searchHistory,
+            contactsAndSettingsGateway = gateway,
+            iconLoader = iconLoader,
+            dispatchers = auroraDispatchers,
+            workspaceRepository = workspaceRepo,
+            launcherAppsGateway = launcherGateway,
+        )
+
+        viewModel.openAppInfo(app1.key)
+        assertEquals(1, launcherGateway.openedAppInfos.size)
+        assertEquals(app1.key, launcherGateway.openedAppInfos.first())
+    }
+
+    @Test
+    fun `uninstallApp delegates to launcherAppsGateway`() = runTest(testDispatcher) {
+        val appCatalog = FakeAppCatalogRepository(listOf(app1, app2))
+        val settingsRepo = FakeSettingsRepository()
+        val searchHistory = FakeSearchHistoryRepository()
+        val gateway = ContactsAndSettingsSearchGateway()
+        val iconLoader = IconCacheAndLoader()
+        val workspaceRepo = FakeWorkspaceRepository()
+        val launcherGateway = FakeLauncherAppsGateway()
+
+        val viewModel = SpotlightViewModel(
+            appCatalogRepository = appCatalog,
+            settingsRepository = settingsRepo,
+            searchHistoryRepository = searchHistory,
+            contactsAndSettingsGateway = gateway,
+            iconLoader = iconLoader,
+            dispatchers = auroraDispatchers,
+            workspaceRepository = workspaceRepo,
+            launcherAppsGateway = launcherGateway,
+        )
+
+        viewModel.uninstallApp(app1.key)
+        assertEquals(1, launcherGateway.requestedUninstalls.size)
+        assertEquals(app1.key, launcherGateway.requestedUninstalls.first())
+    }
+
+    @Test
+    fun `setAppLocked and setAppHidden update appCatalogRepository`() = runTest(testDispatcher) {
+        val appCatalog = FakeAppCatalogRepository(listOf(app1, app2))
+        val settingsRepo = FakeSettingsRepository()
+        val searchHistory = FakeSearchHistoryRepository()
+        val gateway = ContactsAndSettingsSearchGateway()
+        val iconLoader = IconCacheAndLoader()
+        val workspaceRepo = FakeWorkspaceRepository()
+        val launcherGateway = FakeLauncherAppsGateway()
+
+        val viewModel = SpotlightViewModel(
+            appCatalogRepository = appCatalog,
+            settingsRepository = settingsRepo,
+            searchHistoryRepository = searchHistory,
+            contactsAndSettingsGateway = gateway,
+            iconLoader = iconLoader,
+            dispatchers = auroraDispatchers,
+            workspaceRepository = workspaceRepo,
+            launcherAppsGateway = launcherGateway,
+        )
+
+        viewModel.setAppLocked(app1.key, true)
+        advanceUntilIdle()
+        val lockedApp = appCatalog.allApps.first().first { it.key == app1.key }
+        assertTrue(lockedApp.isLocked)
+
+        viewModel.setAppHidden(app1.key, true)
+        advanceUntilIdle()
+        val hiddenApp = appCatalog.allApps.first().first { it.key == app1.key }
+        assertTrue(hiddenApp.isHidden)
     }
 }

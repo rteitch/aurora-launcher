@@ -343,6 +343,7 @@ private fun LauncherShell(
                 badgeCounts = state.badgeCounts,
                 onDismiss = viewModel::closeOverlay,
                 onLaunchApp = launchHandler,
+                onShowMessage = viewModel::showMessage,
             )
 
             ControlPanelOverlay(

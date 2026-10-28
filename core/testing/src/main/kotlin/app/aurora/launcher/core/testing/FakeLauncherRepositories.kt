@@ -246,6 +246,8 @@ class FakeLauncherAppsGateway(
     val launchedActivities: MutableList<ComponentKey> = mutableListOf(),
     val launchedShortcuts: MutableList<Triple<String, String, Long>> = mutableListOf(),
     val launchedBounds: MutableList<android.graphics.Rect?> = mutableListOf(),
+    val openedAppInfos: MutableList<ComponentKey> = mutableListOf(),
+    val requestedUninstalls: MutableList<ComponentKey> = mutableListOf(),
 ) : app.aurora.launcher.core.platform.LauncherAppsGateway() {
     override fun launchActivity(key: ComponentKey, sourceBounds: android.graphics.Rect?): SystemResult<Unit> {
         launchedActivities.add(key)
@@ -261,6 +263,16 @@ class FakeLauncherAppsGateway(
     ): SystemResult<Unit> {
         launchedShortcuts.add(Triple(packageName, shortcutId, userSerial))
         launchedBounds.add(sourceBounds)
+        return SystemResult.Success(Unit)
+    }
+
+    override fun openAppInfo(key: ComponentKey, sourceBounds: android.graphics.Rect?): SystemResult<Unit> {
+        openedAppInfos.add(key)
+        return SystemResult.Success(Unit)
+    }
+
+    override fun requestUninstall(key: ComponentKey): SystemResult<Unit> {
+        requestedUninstalls.add(key)
         return SystemResult.Success(Unit)
     }
 
