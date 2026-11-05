@@ -112,6 +112,8 @@
     <string name="spotlight_section_history">Pencarian Terakhir</string>
     <string name="spotlight_section_settings">Pengaturan Sistem</string>
     <string name="spotlight_section_contacts">Kontak</string>
+    <string name="spotlight_section_calculation">Kalkulasi &amp; Konversi</string>
+    <string name="spotlight_calculation_copied">Hasil disalin ke papan klip.</string>
     <string name="spotlight_clear_history">Hapus Riwayat</string>
     <string name="spotlight_empty_title">Tidak ada hasil untuk \"%1$s\"</string>
     <string name="spotlight_empty_body">Coba ketik inisial seperti \"gm\" atau telusuri daftar lengkap di App Library.</string>

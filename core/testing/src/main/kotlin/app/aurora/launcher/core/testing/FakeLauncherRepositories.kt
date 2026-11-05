@@ -248,7 +248,13 @@ class FakeLauncherAppsGateway(
     val launchedBounds: MutableList<android.graphics.Rect?> = mutableListOf(),
     val openedAppInfos: MutableList<ComponentKey> = mutableListOf(),
     val requestedUninstalls: MutableList<ComponentKey> = mutableListOf(),
+    val requestedQuietModeUnpauses: MutableList<Long> = mutableListOf(),
 ) : app.aurora.launcher.core.platform.LauncherAppsGateway() {
+    override fun requestUnpauseQuietMode(userSerial: Long): Boolean {
+        requestedQuietModeUnpauses.add(userSerial)
+        return true
+    }
+
     override fun launchActivity(key: ComponentKey, sourceBounds: android.graphics.Rect?): SystemResult<Unit> {
         launchedActivities.add(key)
         launchedBounds.add(sourceBounds)

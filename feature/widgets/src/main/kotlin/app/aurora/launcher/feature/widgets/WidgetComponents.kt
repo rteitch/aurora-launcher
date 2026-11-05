@@ -700,9 +700,9 @@ fun WidgetHostSlot(
     val removeLabel = stringResource(R.string.action_remove)
 
     val reduceMotion = AuroraTheme.reduceMotion
-    val rotationDeg = if (isEditMode && !reduceMotion) {
+    val rotationAnim = if (isEditMode && !reduceMotion) {
         val transition = rememberInfiniteTransition(label = "widgetJiggle")
-        val anim by transition.animateFloat(
+        transition.animateFloat(
             initialValue = -0.7f,
             targetValue = 0.7f,
             animationSpec = infiniteRepeatable(
@@ -711,14 +711,13 @@ fun WidgetHostSlot(
             ),
             label = "widgetDeg",
         )
-        anim
     } else {
-        0f
+        null
     }
 
     Box(
         modifier = modifier
-            .graphicsLayer { rotationZ = rotationDeg }
+            .graphicsLayer { rotationZ = rotationAnim?.value ?: 0f }
             .clip(cardShape)
             .semantics {
                 customActions = buildList {

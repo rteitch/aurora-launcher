@@ -2,6 +2,8 @@ package app.aurora.launcher.core.model
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Locale
@@ -220,6 +222,74 @@ class CoreModelEnginesTest {
 
         val diacriticResult = SpotlightSearchEngine.search("cafe", listOf(gm, secret, cafe))
         assertEquals(listOf(cafe), diacriticResult.matchingApps)
+    }
+
+    @Test
+    fun `SpotlightSearchEngine evaluates arithmetic expressions deterministically`() {
+        assertEquals("100", SpotlightSearchEngine.evaluateArithmeticExpression("25 * 4")?.result)
+        assertEquals("50", SpotlightSearchEngine.evaluateArithmeticExpression("100 / 2")?.result)
+        assertEquals("30", SpotlightSearchEngine.evaluatePercentageExpression("15% of 200")?.result)
+        assertEquals("220", SpotlightSearchEngine.evaluatePercentageExpression("200 + 10%")?.result)
+        assertEquals("100", SpotlightSearchEngine.evaluateArithmeticExpression("(12 + 8) * 5")?.result)
+        assertEquals("256", SpotlightSearchEngine.evaluateArithmeticExpression("2 ^ 8")?.result)
+        assertEquals("2000000000000000", SpotlightSearchEngine.evaluateArithmeticExpression("1000000000000000 * 2")?.result)
+        assertNull(SpotlightSearchEngine.evaluateArithmeticExpression("100 / 0"))
+        assertNull(SpotlightSearchEngine.evaluateArithmeticExpression("Chrome"))
+        assertNull(SpotlightSearchEngine.evaluateArithmeticExpression("+62"))
+        assertNull(SpotlightSearchEngine.evaluateArithmeticExpression("-5"))
+        assertNull(SpotlightSearchEngine.evaluateArithmeticExpression("42"))
+        assertNull(SpotlightSearchEngine.evaluateArithmeticExpression("((((((((((((((((((((((((((((((((((((((((1+1))))))))))))))))))))))))))))))))))))))))"))
+    }
+
+    @Test
+    fun `SpotlightSearchEngine evaluates unit conversions deterministically`() {
+        val kmToMiles = SpotlightSearchEngine.evaluateUnitConversion("10 km to miles")
+        assertNotNull(kmToMiles)
+        assertEquals("6.2137 mi", kmToMiles?.result)
+
+        val kmKeMil = SpotlightSearchEngine.evaluateUnitConversion("10 km ke mil")
+        assertNotNull(kmKeMil)
+        assertEquals("6.2137 mi", kmKeMil?.result)
+
+        val kgToLbs = SpotlightSearchEngine.evaluateUnitConversion("5 kg to lbs")
+        assertNotNull(kgToLbs)
+        assertEquals("11.0231 lbs", kgToLbs?.result)
+
+        val mmToCm = SpotlightSearchEngine.evaluateUnitConversion("100 mm to cm")
+        assertNotNull(mmToCm)
+        assertEquals("10 cm", mmToCm?.result)
+
+        val tonToKg = SpotlightSearchEngine.evaluateUnitConversion("2 ton to kg")
+        assertNotNull(tonToKg)
+        assertEquals("2000 kg", tonToKg?.result)
+
+        val ydToM = SpotlightSearchEngine.evaluateUnitConversion("100 yard as meter")
+        assertNotNull(ydToM)
+        assertEquals("91.44 m", ydToM?.result)
+
+        val cToF = SpotlightSearchEngine.evaluateUnitConversion("100 celcius ke fahrenheit")
+        assertNotNull(cToF)
+        assertEquals("212 °F", cToF?.result)
+
+        val cToFShort = SpotlightSearchEngine.evaluateUnitConversion("100c to f")
+        assertNotNull(cToFShort)
+        assertEquals("212 °F", cToFShort?.result)
+
+        val fToC = SpotlightSearchEngine.evaluateUnitConversion("32 f to c")
+        assertNotNull(fToC)
+        assertEquals("0 °C", fToC?.result)
+
+        assertNull(SpotlightSearchEngine.evaluateUnitConversion("10 km to lbs"))
+    }
+
+    @Test
+    fun `SpotlightSearchEngine returns calculation result in SpotlightResults`() {
+        val result = SpotlightSearchEngine.search("25 * 4", emptyList())
+        assertNotNull(result.calculationResult)
+        assertEquals("100", result.calculationResult?.result)
+
+        val nonCalc = SpotlightSearchEngine.search("Maps", emptyList())
+        assertNull(nonCalc.calculationResult)
     }
 
     @Test

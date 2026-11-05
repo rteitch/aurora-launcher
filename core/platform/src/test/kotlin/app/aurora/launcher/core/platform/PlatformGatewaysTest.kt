@@ -117,4 +117,25 @@ class PlatformGatewaysTest {
         val gateway = NotificationBadgeGateway(context = null)
         assertFalse(gateway.requestRebindService())
     }
+
+    @Test
+    fun `LauncherAppsGateway requestUnpauseQuietMode returns false safely when context is null`() {
+        val gateway = LauncherAppsGateway(context = null)
+        assertFalse(gateway.requestUnpauseQuietMode(0L))
+    }
+
+    @Test
+    fun `LauncherAppsGateway launchShortcut returns failure safely when context is null`() {
+        val gateway = LauncherAppsGateway(context = null)
+        val result = gateway.launchShortcut("com.test", "id1", 0L)
+        assertTrue(result is app.aurora.launcher.core.common.SystemResult.Failure)
+    }
+
+    @Test
+    fun `IconCacheAndLoader invalidateAll and evict operate safely without throwing`() {
+        val loader = IconCacheAndLoader()
+        loader.invalidateAll()
+        loader.evict(app.aurora.launcher.core.model.ComponentKey("com.test", "MainActivity", 0L))
+        loader.trimMemory(android.content.ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN)
+    }
 }

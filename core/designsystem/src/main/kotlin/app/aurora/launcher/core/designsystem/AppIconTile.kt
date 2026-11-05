@@ -77,9 +77,9 @@ fun AppIconTile(
     val resolvedShape = remember(iconShape) { resolveIconShape(iconShape) }
 
     // Jiggle runs only during user-activated EditMode and stops when Reduce Motion is enabled (E26, R-19)
-    val rotationDeg = if (isEditMode && !reduceMotion) {
+    val rotationAnim = if (isEditMode && !reduceMotion) {
         val transition = rememberInfiniteTransition(label = "editJiggle")
-        val anim by transition.animateFloat(
+        transition.animateFloat(
             initialValue = -1.6f,
             targetValue = 1.6f,
             animationSpec = infiniteRepeatable(
@@ -88,9 +88,8 @@ fun AppIconTile(
             ),
             label = "jiggleDegrees",
         )
-        anim
     } else {
-        0f
+        null
     }
 
     val colorFilter: ColorFilter? = remember(isSuspendedOrPaused, monochromeEnabled, palette.accent) {
@@ -140,7 +139,7 @@ fun AppIconTile(
     ) {
         Box(
             contentAlignment = Alignment.Center,
-            modifier = Modifier.graphicsLayer { rotationZ = rotationDeg },
+            modifier = Modifier.graphicsLayer { rotationZ = rotationAnim?.value ?: 0f },
         ) {
             Box(
                 contentAlignment = Alignment.Center,

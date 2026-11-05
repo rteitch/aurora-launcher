@@ -41,6 +41,15 @@ class LaunchAppUseCaseTest {
         isLocked = false,
         isSuspended = true,
     )
+    private val quietModeKey = ComponentKey("com.example.enterprise", "EnterpriseActivity", 10L)
+    private val quietModeApp = AppEntry(
+        key = quietModeKey,
+        label = "Enterprise Portal",
+        sortKey = "enterprise portal",
+        isLocked = false,
+        isSuspended = false,
+        isQuietModePaused = true,
+    )
 
     @Test
     fun `prepareLaunch returns Success and records launch for normal app`() = runTest {
@@ -67,6 +76,39 @@ class LaunchAppUseCaseTest {
         assertTrue(result is LaunchAppResult.Suspended)
         assertEquals("com.example.work", (result as LaunchAppResult.Suspended).packageName)
         assertTrue(gateway.launchedActivities.isEmpty())
+    }
+
+    @Test
+    fun `prepareLaunch allows quiet mode app to proceed to launch for enterprise unpause handshake`() = runTest {
+        val appCatalog = FakeAppCatalogRepository(listOf(quietModeApp))
+        val settingsRepo = FakeSettingsRepository()
+        val gateway = FakeLauncherAppsGateway()
+        val useCase = LaunchAppUseCase(appCatalog, settingsRepo, gateway)
+
+        val result = useCase.prepareLaunch(LaunchTarget.Component(quietModeKey))
+
+        assertTrue(result is LaunchAppResult.Success)
+        assertEquals(listOf(quietModeKey), gateway.launchedActivities)
+    }
+
+    @Test
+    fun `prepareLaunch disambiguates dual-profile app by userSerial when one profile is locked`() = runTest {
+        val personalKey = ComponentKey("com.example.chat", "ChatActivity", 0L)
+        val personalApp = AppEntry(personalKey, "Chat", "chat", isLocked = false, isSuspended = false)
+        val workKey = ComponentKey("com.example.chat", "ChatActivity", 10L)
+        val workApp = AppEntry(workKey, "Chat Work", "chat work", isLocked = true, isSuspended = false)
+
+        val appCatalog = FakeAppCatalogRepository(listOf(personalApp, workApp))
+        val settingsRepo = FakeSettingsRepository(LauncherSettings(biometricAppLockEnabled = true))
+        val gateway = FakeLauncherAppsGateway()
+        val useCase = LaunchAppUseCase(appCatalog, settingsRepo, gateway)
+
+        val personalResult = useCase.prepareLaunch(LaunchTarget.Component(personalKey))
+        assertTrue(personalResult is LaunchAppResult.Success)
+
+        val workResult = useCase.prepareLaunch(LaunchTarget.Component(workKey))
+        assertTrue(workResult is LaunchAppResult.BiometricRequired)
+        assertEquals("Chat Work", (workResult as LaunchAppResult.BiometricRequired).appLabel)
     }
 
     @Test

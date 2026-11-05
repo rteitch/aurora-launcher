@@ -42,9 +42,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Calculate
 import androidx.compose.material.icons.outlined.Clear
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DeleteOutline
@@ -82,11 +86,15 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -112,6 +120,7 @@ import app.aurora.launcher.core.designsystem.R
 import app.aurora.launcher.core.designsystem.auroraFocusRing
 import app.aurora.launcher.core.model.AppEntry
 import app.aurora.launcher.core.model.ComponentKey
+import app.aurora.launcher.core.model.CalculationResult
 import app.aurora.launcher.core.model.ContactSearchResult
 import app.aurora.launcher.core.model.GlassTier
 import app.aurora.launcher.core.model.IconShapeOption
@@ -300,8 +309,10 @@ fun SpotlightOverlay(
     val configuration = LocalConfiguration.current
     val isTablet = configuration.screenWidthDp >= 600
     val haptics = LocalHapticFeedback.current
+    val context = LocalContext.current
     val addedNotice = stringResource(R.string.home_grid_added_notice)
     val fullNotice = stringResource(R.string.home_grid_full_notice)
+    val calculationCopiedNotice = stringResource(R.string.spotlight_calculation_copied)
     var actionTargetApp by remember { mutableStateOf<AppEntry?>(null) }
     var uninstallConfirmTarget by remember { mutableStateOf<AppEntry?>(null) }
 
@@ -423,6 +434,15 @@ fun SpotlightOverlay(
                                         viewModel.commitQueryToHistoryIfEnabled()
                                         dismissWithFocusClear()
                                         onLaunchApp(topApp.key)
+                                    } else {
+                                        val calc = state.results.calculationResult
+                                        if (calc != null) {
+                                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                                            val clip = ClipData.newPlainText("Calculation Result", calc.result)
+                                            clipboard?.setPrimaryClip(clip)
+                                            onShowMessage(calculationCopiedNotice)
+                                            dismissWithFocusClear()
+                                        }
                                     }
                                 },
                             ),
@@ -571,7 +591,8 @@ fun SpotlightOverlay(
 
                             val hasAnyMatch = state.results.matchingApps.isNotEmpty() ||
                                 state.results.matchingSettings.isNotEmpty() ||
-                                state.results.matchingContacts.isNotEmpty()
+                                state.results.matchingContacts.isNotEmpty() ||
+                                state.results.calculationResult != null
 
                             if (!hasAnyMatch) {
                                 item(key = "empty_search") {
@@ -592,6 +613,28 @@ fun SpotlightOverlay(
                                             color = palette.onSurfaceSecondary,
                                         )
                                     }
+                                }
+                            }
+
+                            val calculation = state.results.calculationResult
+                            if (calculation != null) {
+                                item(key = "header_calc") {
+                                    Text(
+                                        text = stringResource(R.string.spotlight_section_calculation),
+                                        style = AuroraTypography.titleMedium,
+                                        color = palette.onSurfaceSecondary,
+                                    )
+                                }
+                                item(key = "calculation_card") {
+                                    CalculationResultCard(
+                                        calculation = calculation,
+                                        onClick = {
+                                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                                            val clip = ClipData.newPlainText("Calculation Result", calculation.result)
+                                            clipboard?.setPrimaryClip(clip)
+                                            onShowMessage(calculationCopiedNotice)
+                                        },
+                                    )
                                 }
                             }
 
@@ -1028,4 +1071,69 @@ private fun localizedSettingTitle(id: String): String = when (id) {
     "apps" -> stringResource(R.string.spotlight_setting_apps)
     "security" -> stringResource(R.string.spotlight_setting_security)
     else -> id
+}
+
+@Composable
+private fun CalculationResultCard(
+    calculation: CalculationResult,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val palette = AuroraTheme.palette
+    val shape = RoundedCornerShape(AuroraRadii.card)
+    val copyActionLabel = stringResource(R.string.spotlight_calculation_copied)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(AuroraSpacing.md),
+        modifier = modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = AuroraSpacing.minTouchTarget)
+            .clip(shape)
+            .background(palette.surfaceVariant.copy(alpha = 0.85f))
+            .border(1.dp, palette.glassHairline.copy(alpha = 0.40f), shape)
+            .clickable(
+                onClick = onClick,
+                role = Role.Button,
+                onClickLabel = copyActionLabel,
+            )
+            .padding(horizontal = AuroraSpacing.md, vertical = AuroraSpacing.sm)
+            .semantics {
+                contentDescription = calculation.formattedDisplay
+            },
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(44.dp)
+                .clip(CircleShape)
+                .background(palette.accent.copy(alpha = 0.15f)),
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Calculate,
+                contentDescription = null,
+                tint = palette.accent,
+                modifier = Modifier.size(24.dp),
+            )
+        }
+
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Text(
+                text = calculation.formattedDisplay,
+                style = AuroraTypography.bodyMedium,
+                color = palette.onSurfaceSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = calculation.result,
+                style = AuroraTypography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                color = palette.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
 }

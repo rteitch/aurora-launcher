@@ -61,9 +61,16 @@ class LaunchAppUseCase @Inject constructor(
     ): LaunchAppResult {
         val settings = settingsRepository.settings.first()
         val allApps = appCatalogRepository.allApps.first()
-        val entry = allApps.firstOrNull { it.key.packageName == target.packageName }
+        val targetSerial = when (target) {
+            is LaunchTarget.Component -> target.key.userSerial
+            is LaunchTarget.Pinned -> target.item.userSerial
+            is LaunchTarget.Dynamic -> target.shortcut.userSerial
+        }
+        val entry = allApps.firstOrNull {
+            it.key.packageName == target.packageName && it.key.userSerial == targetSerial
+        } ?: allApps.firstOrNull { it.key.packageName == target.packageName }
 
-        if (entry != null && (entry.isSuspended || entry.isQuietModePaused)) {
+        if (entry != null && entry.isSuspended) {
             return LaunchAppResult.Suspended(target.packageName)
         }
 

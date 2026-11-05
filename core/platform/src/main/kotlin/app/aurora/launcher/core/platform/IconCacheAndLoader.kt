@@ -6,6 +6,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.pm.LauncherApps
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -21,6 +22,8 @@ import app.aurora.launcher.core.common.safeSystemCall
 import app.aurora.launcher.core.model.ComponentKey
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.security.MessageDigest
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.roundToInt
@@ -47,6 +50,13 @@ open class IconCacheAndLoader(
         }
     }
 
+    private val diskCacheDir: File? = safeSystemCall {
+        val base = context?.cacheDir ?: return@safeSystemCall null
+        File(base, "icons").apply {
+            if (!exists()) mkdirs()
+        }
+    }.getOrNull()
+
     open fun peekCachedIcon(key: ComponentKey, iconPackPackage: String? = null): ImageBitmap? {
         return memoryCache.get(cacheKey(key, iconPackPackage))
     }
@@ -64,6 +74,11 @@ open class IconCacheAndLoader(
         return withContext(ioDispatcher) {
             memoryCache.get(cKey)?.let { return@withContext it }
 
+            loadFromDisk(cKey)?.let { diskBitmap ->
+                memoryCache.put(cKey, diskBitmap)
+                return@withContext diskBitmap
+            }
+
             val customDrawable = if (!iconPackPackage.isNullOrBlank()) {
                 iconPackGateway?.loadCustomDrawable(iconPackPackage, key)
             } else {
@@ -71,14 +86,25 @@ open class IconCacheAndLoader(
             }
 
             val drawable = customDrawable ?: resolveSystemDrawable(key) ?: return@withContext null
-            val bitmap = rasterizeDrawable(drawable, targetSizePx).asImageBitmap()
+            val rawBitmap = rasterizeDrawable(drawable, targetSizePx)
+            val bitmap = rawBitmap.asImageBitmap()
             memoryCache.put(cKey, bitmap)
+            saveToDisk(cKey, rawBitmap)
             bitmap
         }
     }
 
+    open fun evict(key: ComponentKey, iconPackPackage: String? = null) {
+        val cKey = cacheKey(key, iconPackPackage)
+        safeSystemCall { memoryCache.remove(cKey) }
+        safeSystemCall { getDiskFile(cKey)?.delete() }
+    }
+
     open fun invalidateAll() {
         safeSystemCall { memoryCache.evictAll() }
+        safeSystemCall {
+            diskCacheDir?.listFiles()?.forEach { it.delete() }
+        }
         iconPackGateway?.clearCache()
     }
 
@@ -144,5 +170,61 @@ open class IconCacheAndLoader(
 
     private fun cacheKey(key: ComponentKey, iconPackPackage: String?): String {
         return "${iconPackPackage.orEmpty()}|${key.asCompactKey()}"
+    }
+
+    private fun getDiskFile(cKey: String): File? {
+        val dir = diskCacheDir ?: return null
+        val hash = safeSystemCall {
+            val md = MessageDigest.getInstance("MD5")
+            val bytes = md.digest(cKey.toByteArray())
+            bytes.joinToString("") { "%02x".format(it) }
+        }.getOrNull() ?: cKey.replace(Regex("[^a-zA-Z0-9_.-]"), "_")
+        return File(dir, "$hash.png")
+    }
+
+    private fun loadFromDisk(cKey: String): ImageBitmap? {
+        val file = getDiskFile(cKey) ?: return null
+        if (!file.exists() || file.length() == 0L) return null
+        return safeSystemCall {
+            file.setLastModified(System.currentTimeMillis())
+            BitmapFactory.decodeFile(file.absolutePath)?.asImageBitmap()
+        }.getOrNull()
+    }
+
+    private fun saveToDisk(cKey: String, bitmap: Bitmap) {
+        val file = getDiskFile(cKey) ?: return
+        safeSystemCall {
+            val parent = file.parentFile ?: return@safeSystemCall
+            if (!parent.exists()) {
+                parent.mkdirs()
+            }
+            val temp = File(parent, "${file.name}.${System.nanoTime()}.tmp")
+            try {
+                temp.outputStream().use { out ->
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+                    out.flush()
+                }
+                if (temp.exists()) {
+                    if (file.exists()) file.delete()
+                    temp.renameTo(file)
+                }
+                pruneDiskCacheIfNeeded(parent)
+            } finally {
+                if (temp.exists()) {
+                    temp.delete()
+                }
+            }
+        }
+    }
+
+    private fun pruneDiskCacheIfNeeded(dir: File) {
+        safeSystemCall {
+            val files = dir.listFiles { f -> f.extension == "png" } ?: return@safeSystemCall
+            if (files.size > 400) {
+                files.sortedBy { it.lastModified() }
+                    .take(files.size - 300)
+                    .forEach { it.delete() }
+            }
+        }
     }
 }

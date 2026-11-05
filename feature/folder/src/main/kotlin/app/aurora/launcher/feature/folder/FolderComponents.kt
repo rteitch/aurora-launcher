@@ -119,9 +119,9 @@ fun FolderTilePreview(
     val shape = remember(iconShape) { resolveIconShape(iconShape) }
     val displayTitle = folder.title.ifBlank { stringResource(R.string.folder_default_name) }
 
-    val rotationDeg = if (isEditMode && !reduceMotion) {
+    val rotationAnim = if (isEditMode && !reduceMotion) {
         val transition = rememberInfiniteTransition(label = "folderJiggle")
-        val anim by transition.animateFloat(
+        transition.animateFloat(
             initialValue = -1.5f,
             targetValue = 1.5f,
             animationSpec = infiniteRepeatable(
@@ -130,9 +130,8 @@ fun FolderTilePreview(
             ),
             label = "folderDeg",
         )
-        anim
     } else {
-        0f
+        null
     }
 
     val folderClickModifier = if (isEditMode) {
@@ -164,12 +163,12 @@ fun FolderTilePreview(
     ) {
         Box(
             contentAlignment = Alignment.Center,
+            modifier = Modifier.graphicsLayer { rotationZ = rotationAnim?.value ?: 0f },
         ) {
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .size(iconSize)
-                    .graphicsLayer { rotationZ = rotationDeg }
                     .clip(shape)
                     .background(palette.surfaceVariant.copy(alpha = 0.92f))
                     .border(1.dp, palette.glassHairline.copy(alpha = 0.45f), shape)

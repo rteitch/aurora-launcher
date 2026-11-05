@@ -112,6 +112,8 @@
     <string name="spotlight_section_history">Recent Searches</string>
     <string name="spotlight_section_settings">System Settings</string>
     <string name="spotlight_section_contacts">Contacts</string>
+    <string name="spotlight_section_calculation">Calculation &amp; Conversion</string>
+    <string name="spotlight_calculation_copied">Result copied to clipboard.</string>
     <string name="spotlight_clear_history">Clear History</string>
     <string name="spotlight_empty_title">No results for \"%1$s\"</string>
     <string name="spotlight_empty_body">Try searching by initials like \"gm\" or browse all apps in App Library.</string>

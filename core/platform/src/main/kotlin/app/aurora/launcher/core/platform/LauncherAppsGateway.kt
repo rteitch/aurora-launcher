@@ -249,6 +249,18 @@ open class LauncherAppsGateway(
             val handle = resolveUserHandle(key.userSerial)
             val quietMode = userManager?.isQuietModeEnabled(handle) == true
             if (quietMode) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    val requested = userManager?.requestQuietModeEnabled(false, handle) == true
+                    if (requested) {
+                        if (userManager?.isQuietModeEnabled(handle) == false) {
+                            val component = ComponentName(key.packageName, key.activityClass)
+                            val options = buildTransitionOptions(sourceBounds)
+                            launcherApps?.startMainActivity(component, handle, sourceBounds, options)
+                                ?: throw IllegalStateException("LauncherApps service unavailable")
+                        }
+                        return@safeSystemCall
+                    }
+                }
                 throw IllegalStateException("Profile is paused in quiet mode")
             }
             val component = ComponentName(key.packageName, key.activityClass)
@@ -302,6 +314,21 @@ open class LauncherAppsGateway(
     ): SystemResult<Unit> {
         return safeSystemCall {
             val handle = resolveUserHandle(userSerial)
+            val quietMode = userManager?.isQuietModeEnabled(handle) == true
+            if (quietMode) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    val requested = userManager?.requestQuietModeEnabled(false, handle) == true
+                    if (requested) {
+                        if (userManager?.isQuietModeEnabled(handle) == false) {
+                            val options = buildTransitionOptions(sourceBounds)
+                            launcherApps?.startShortcut(packageName, shortcutId, sourceBounds, options, handle)
+                                ?: throw IllegalStateException("LauncherApps service unavailable")
+                        }
+                        return@safeSystemCall
+                    }
+                }
+                throw IllegalStateException("Profile is paused in quiet mode")
+            }
             val options = buildTransitionOptions(sourceBounds)
             launcherApps?.startShortcut(packageName, shortcutId, sourceBounds, options, handle)
                 ?: throw IllegalStateException("LauncherApps service unavailable")
@@ -347,6 +374,18 @@ open class LauncherAppsGateway(
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                         return@safeSystemCall userManager?.requestQuietModeEnabled(false, profile) == true
                     }
+                }
+            }
+            false
+        }.getOrNull() ?: false
+    }
+
+    open fun requestUnpauseQuietMode(userSerial: Long): Boolean {
+        return safeSystemCall {
+            val handle = resolveUserHandle(userSerial)
+            if (userManager?.isQuietModeEnabled(handle) == true) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    return@safeSystemCall userManager?.requestQuietModeEnabled(false, handle) == true
                 }
             }
             false
