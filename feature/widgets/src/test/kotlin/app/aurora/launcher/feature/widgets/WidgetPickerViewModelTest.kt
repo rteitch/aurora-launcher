@@ -127,4 +127,36 @@ class WidgetPickerViewModelTest {
         assertEquals(4, WidgetSpanCalculator.dpToCells(250, 4))
         assertEquals(4, WidgetSpanCalculator.dpToCells(350, 4)) // clamped to maxCells
     }
+
+    @Test
+    fun `desktopLocked prevents widget placement and smart header restoration`() = runTest(testDispatcher) {
+        val hostManager = TestAppWidgetHostManager(listOf(candidate1))
+        val workspaceRepo = FakeWorkspaceRepository()
+        val settingsRepo = FakeSettingsRepository(LauncherSettings(desktopLocked = true, showSmartHeaderOnPage1 = false))
+
+        val viewModel = WidgetPickerViewModel(
+            hostManager = hostManager,
+            workspaceRepository = workspaceRepo,
+            settingsRepository = settingsRepo,
+        )
+
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect()
+        }
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.desktopLocked)
+
+        var placeResult: Boolean? = null
+        viewModel.commitPlacedWidget(candidate1, 101, null, GridSpec(4, 6, 4)) { ok ->
+            placeResult = ok
+        }
+        advanceUntilIdle()
+
+        assertFalse(placeResult == true)
+
+        viewModel.restoreSmartHeader {}
+        advanceUntilIdle()
+        assertFalse(settingsRepo.currentSettings.showSmartHeaderOnPage1)
+    }
 }

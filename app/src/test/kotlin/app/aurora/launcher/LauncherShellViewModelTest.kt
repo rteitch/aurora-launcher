@@ -123,7 +123,11 @@ class LauncherShellViewModelTest {
 
         viewModel.openSpotlight()
         advanceUntilIdle()
-        assertEquals(ShellOverlay.Spotlight, viewModel.uiState.value.overlay)
+        assertEquals(ShellOverlay.Spotlight(), viewModel.uiState.value.overlay)
+
+        viewModel.openSpotlight("app")
+        advanceUntilIdle()
+        assertEquals(ShellOverlay.Spotlight("app"), viewModel.uiState.value.overlay)
 
         viewModel.openControlPanel()
         advanceUntilIdle()
@@ -146,7 +150,7 @@ class LauncherShellViewModelTest {
         advanceUntilIdle()
         viewModel.openSpotlight()
         advanceUntilIdle()
-        assertEquals(ShellOverlay.Spotlight, viewModel.uiState.value.overlay)
+        assertEquals(ShellOverlay.Spotlight(), viewModel.uiState.value.overlay)
 
         viewModel.onHomeIntentReceived()
         advanceUntilIdle()
@@ -162,5 +166,20 @@ class LauncherShellViewModelTest {
     fun `removeChildFromFolder delegates to extractChildFromFolder in workspace repository`() = runTest {
         viewModel.removeChildFromFolder(ItemId(101L))
         advanceUntilIdle()
+    }
+
+    @Test
+    fun `openWidgetPicker is blocked when desktop is locked`() = runTest {
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect()
+        }
+        advanceUntilIdle()
+
+        settingsRepository.updateSettings { it.copy(desktopLocked = true) }
+        advanceUntilIdle()
+
+        viewModel.openWidgetPicker(null)
+        advanceUntilIdle()
+        assertEquals(ShellOverlay.None, viewModel.uiState.value.overlay)
     }
 }

@@ -262,6 +262,10 @@ class SpotlightViewModel @Inject constructor(
     }
 
     fun addAppToWorkspace(app: AppEntry, isTablet: Boolean, onResult: (Boolean) -> Unit) {
+        if (uiState.value.settings.desktopLocked) {
+            onResult(false)
+            return
+        }
         viewModelScope.launch {
             val spec = uiState.value.settings.effectiveGridSpec(isTablet)
             val added = workspaceRepository.addAppToHome(app.key, spec)
@@ -293,6 +297,7 @@ class SpotlightViewModel @Inject constructor(
 @Composable
 fun SpotlightOverlay(
     visible: Boolean,
+    initialQuery: String = "",
     glassTier: GlassTier,
     badgeCounts: Map<String, Int>,
     onDismiss: () -> Unit,
@@ -312,6 +317,7 @@ fun SpotlightOverlay(
     val context = LocalContext.current
     val addedNotice = stringResource(R.string.home_grid_added_notice)
     val fullNotice = stringResource(R.string.home_grid_full_notice)
+    val lockedNotice = stringResource(R.string.home_grid_locked_notice)
     val calculationCopiedNotice = stringResource(R.string.spotlight_calculation_copied)
     var actionTargetApp by remember { mutableStateOf<AppEntry?>(null) }
     var uninstallConfirmTarget by remember { mutableStateOf<AppEntry?>(null) }
@@ -330,9 +336,12 @@ fun SpotlightOverlay(
         viewModel.refreshPermissions()
     }
 
-    LaunchedEffect(visible) {
+    LaunchedEffect(visible, initialQuery) {
         if (visible) {
             viewModel.refreshPermissions()
+            if (initialQuery.isNotEmpty()) {
+                viewModel.updateQuery(initialQuery)
+            }
             runCatching { focusRequester.requestFocus() }
         } else {
             keyboardController?.hide()
@@ -665,8 +674,12 @@ fun SpotlightOverlay(
                                         onQuickAction = { action ->
                                             when (action) {
                                                 SpotlightQuickAction.ADD_TO_HOME -> {
-                                                    viewModel.addAppToWorkspace(app, isTablet) { added ->
-                                                        onShowMessage(if (added) addedNotice else fullNotice)
+                                                    if (state.settings.desktopLocked) {
+                                                        onShowMessage(lockedNotice)
+                                                    } else {
+                                                        viewModel.addAppToWorkspace(app, isTablet) { added ->
+                                                            onShowMessage(if (added) addedNotice else fullNotice)
+                                                        }
                                                     }
                                                 }
                                                 SpotlightQuickAction.APP_INFO -> {
@@ -789,8 +802,12 @@ fun SpotlightOverlay(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(AuroraSpacing.xs)) {
                     ActionSheetRow(stringResource(R.string.quick_action_add_to_home)) {
-                        viewModel.addAppToWorkspace(currentActionApp, isTablet) { added ->
-                            onShowMessage(if (added) addedNotice else fullNotice)
+                        if (state.settings.desktopLocked) {
+                            onShowMessage(lockedNotice)
+                        } else {
+                            viewModel.addAppToWorkspace(currentActionApp, isTablet) { added ->
+                                onShowMessage(if (added) addedNotice else fullNotice)
+                            }
                         }
                         actionTargetApp = null
                     }

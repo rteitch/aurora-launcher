@@ -16,6 +16,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,6 +24,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
@@ -116,6 +124,7 @@ data class WidgetPickerUiState(
     val query: String = "",
     val candidates: List<WidgetProviderCandidate> = emptyList(),
     val showSmartGlanceCandidate: Boolean = false,
+    val desktopLocked: Boolean = false,
 )
 
 @HiltViewModel
@@ -131,12 +140,19 @@ class WidgetPickerViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             settingsRepository.settings.collect { s ->
-                _uiState.value = _uiState.value.copy(showSmartGlanceCandidate = !s.showSmartHeaderOnPage1)
+                _uiState.value = _uiState.value.copy(
+                    showSmartGlanceCandidate = !s.showSmartHeaderOnPage1,
+                    desktopLocked = s.desktopLocked,
+                )
             }
         }
     }
 
     fun restoreSmartHeader(onComplete: () -> Unit) {
+        if (_uiState.value.desktopLocked) {
+            onComplete()
+            return
+        }
         viewModelScope.launch {
             settingsRepository.updateSettings { it.copy(showSmartHeaderOnPage1 = true) }
             onComplete()
@@ -165,6 +181,11 @@ class WidgetPickerViewModel @Inject constructor(
         gridSpec: GridSpec,
         onComplete: (Boolean) -> Unit,
     ) {
+        if (_uiState.value.desktopLocked) {
+            hostManager.deleteWidgetId(appWidgetId)
+            onComplete(false)
+            return
+        }
         viewModelScope.launch {
             val itemId = workspaceRepository.placeWidget(
                 candidate = candidate,
@@ -197,10 +218,16 @@ fun WidgetPickerOverlay(
 
     BackHandler(onBack = onDismiss)
 
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
+
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val palette = AuroraTheme.palette
     val addedNotice = stringResource(R.string.home_grid_added_notice)
     val fullNotice = stringResource(R.string.home_grid_full_notice)
+    val lockedNotice = stringResource(R.string.home_grid_locked_notice)
 
     LaunchedEffect(gridSpec) {
         viewModel.loadProviders(gridSpec)
@@ -274,6 +301,18 @@ fun WidgetPickerOverlay(
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.54f))
             .imePadding()
+            .focusRequester(focusRequester)
+            .focusable()
+            .onPreviewKeyEvent { ev ->
+                if ((ev.type == KeyEventType.KeyDown || ev.type == KeyEventType.KeyUp) && ev.key == Key.Escape) {
+                    if (ev.type == KeyEventType.KeyDown) {
+                        onDismiss()
+                    }
+                    true
+                } else {
+                    false
+                }
+            }
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -412,9 +451,13 @@ fun WidgetPickerOverlay(
                             item(key = "candidate_smart_glance", span = { GridItemSpan(maxLineSpan) }) {
                                 SmartGlanceCandidateCard(
                                     onRestore = {
-                                        viewModel.restoreSmartHeader {
-                                            onShowMessage(addedNotice)
-                                            onDismiss()
+                                        if (state.desktopLocked) {
+                                            onShowMessage(lockedNotice)
+                                        } else {
+                                            viewModel.restoreSmartHeader {
+                                                onShowMessage(addedNotice)
+                                                onDismiss()
+                                            }
                                         }
                                     },
                                 )
@@ -436,6 +479,10 @@ fun WidgetPickerOverlay(
                                     candidate = candidate,
                                     hostManager = viewModel.hostManager,
                                     onAddWidget = {
+                                        if (state.desktopLocked) {
+                                            onShowMessage(lockedNotice)
+                                            return@WidgetCandidateCard
+                                        }
                                         val allocated = viewModel.hostManager.allocateWidgetId()
                                         if (allocated > 0) {
                                             val boundNow = viewModel.hostManager.bindWidgetIfAllowed(allocated, candidate)

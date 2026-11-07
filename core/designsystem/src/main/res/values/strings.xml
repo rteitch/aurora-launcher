@@ -49,6 +49,7 @@
     <string name="home_badge_revoked_notice">Notification access was turned off. Count badges are hidden.</string>
     <string name="home_grid_added_notice">Added to home screen.</string>
     <string name="home_grid_full_notice">No free space left on workspace pages.</string>
+    <string name="home_grid_locked_notice">Home screen layout is locked in Settings.</string>
 
     <!-- Accessibility custom actions (E23) -->
     <string name="a11y_enter_edit_mode">Edit home layout</string>
@@ -295,4 +296,22 @@
     <string name="smart_glance_widget_desc">Clock, date, and Google search bar</string>
     <string name="smart_glance_removed_notice">Smart Glance removed from page 1.</string>
     <string name="smart_glance_delete_cd">Remove Smart Glance</string>
+
+    <!-- Cycle 2 Enterprise & Performance Strings -->
+    <string name="settings_lock_desktop_title">Lock Desktop Layout</string>
+    <string name="settings_lock_desktop_subtitle">Prevent moving apps, widgets, or editing home screen layout</string>
+    <string name="settings_potato_mode_title">Potato Mode (Extreme Performance)</string>
+    <string name="settings_potato_mode_subtitle">Force solid surfaces, drop wallpaper memory, and maximize responsiveness</string>
+    <string name="control_ram_boost">RAM Boost</string>
+    <string name="control_ram_boost_done">Freed %1$d MB of memory.</string>
+    <string name="library_tab_personal">Personal</string>
+    <string name="library_tab_work">Work</string>
+    <string name="library_work_paused_title">Work profile is paused</string>
+    <string name="library_work_turn_on">Turn On Work Apps</string>
+    <string name="library_work_pause">Pause Work Apps</string>
+    <string name="settings_backup_passphrase_title">Backup Password (Optional)</string>
+    <string name="settings_backup_passphrase_hint">Enter password to encrypt backup</string>
+    <string name="settings_backup_decrypt_title">Decrypt Backup</string>
+    <string name="settings_backup_decrypt_prompt">Enter password to decrypt this backup:</string>
+    <string name="settings_backup_decrypt_wrong_pass">Incorrect password or corrupted backup file</string>
 </resources>

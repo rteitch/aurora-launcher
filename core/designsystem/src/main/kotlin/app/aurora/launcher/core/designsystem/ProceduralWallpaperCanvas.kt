@@ -28,12 +28,13 @@ import java.io.File
 fun ProceduralWallpaperCanvas(
     style: WallpaperStyle,
     customWallpaperPath: String?,
+    potatoMode: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     if (style == WallpaperStyle.CUSTOM_IMAGE && !customWallpaperPath.isNullOrBlank()) {
-        val loadedBitmap = produceState<ImageBitmap?>(initialValue = null, customWallpaperPath) {
+        val loadedBitmap = produceState<ImageBitmap?>(initialValue = null, customWallpaperPath, potatoMode) {
             value = withContext(Dispatchers.IO) {
-                decodeDownsampledWallpaper(customWallpaperPath, maxDimension = 1600)
+                decodeDownsampledWallpaper(customWallpaperPath, maxDimension = if (potatoMode) 800 else 1600)
             }
         }.value
 
@@ -46,6 +47,21 @@ fun ProceduralWallpaperCanvas(
             )
             return
         }
+    }
+
+    if (potatoMode) {
+        Canvas(modifier = modifier.fillMaxSize()) {
+            drawRect(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        Color(0xFF090E16),
+                        Color(0xFF0F1A28),
+                        Color(0xFF0B121B),
+                    ),
+                ),
+            )
+        }
+        return
     }
 
     val path1 = remember { Path() }

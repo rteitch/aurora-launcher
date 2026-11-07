@@ -19,6 +19,15 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.utf16CodePoint
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -174,7 +183,7 @@ fun HomeScreen(
     onLaunchApp: (ComponentKey, android.graphics.Rect?) -> Unit,
     onLaunchShortcut: (LaunchTarget) -> Unit = {},
     onOpenFolder: (ItemId) -> Unit,
-    onOpenSpotlight: () -> Unit,
+    onOpenSpotlight: (String) -> Unit = {},
     onOpenControlPanel: () -> Unit,
     onOpenWidgetPicker: (app.aurora.launcher.core.model.PageId?) -> Unit,
     onOpenSettings: () -> Unit,
@@ -223,6 +232,22 @@ fun HomeScreen(
     val canRedo = state.canRedo
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
+    val homeFocusRequester = remember { FocusRequester() }
+    fun launchSpotlight(query: String = "") {
+        onOpenSpotlight(query)
+    }
+    val lockedNotice = stringResource(R.string.home_grid_locked_notice)
+    val tryEnterEditMode: () -> Unit = {
+        if (state.settings.desktopLocked) {
+            onShowMessage(lockedNotice)
+        } else {
+            viewModel.enterEditMode()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        runCatching { homeFocusRequester.requestFocus() }
+    }
 
     val isEditMode = state.mode is HomeUiMode.EditMode
     val activeDrag = (state.mode as? HomeUiMode.EditMode)?.dragSession
@@ -360,9 +385,50 @@ fun HomeScreen(
 
     val onAppLibraryPage = showAppLibrary && pagerState.currentPage == workspacePages.size
 
+    LaunchedEffect(isEditMode, state.quickActionsTarget, onAppLibraryPage) {
+        if (!isEditMode && state.quickActionsTarget == null && !onAppLibraryPage) {
+            runCatching { homeFocusRequester.requestFocus() }
+        }
+    }
+
+    LaunchedEffect(state.settings.desktopLocked) {
+        if (state.settings.desktopLocked && isEditMode) {
+            viewModel.exitEditMode()
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .focusRequester(homeFocusRequester)
+            .focusable()
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown) {
+                    if (event.key == Key.Escape) {
+                        if (state.quickActionsTarget != null || state.mode is HomeUiMode.QuickActions) {
+                            viewModel.dismissQuickActions()
+                            return@onPreviewKeyEvent true
+                        }
+                        if (isEditMode) {
+                            viewModel.exitEditMode()
+                            return@onPreviewKeyEvent true
+                        }
+                        if (pagerState.currentPage != 0) {
+                            scope.launch { pagerState.animateScrollToPage(0) }
+                            return@onPreviewKeyEvent true
+                        }
+                    }
+                    if (!onAppLibraryPage && !isEditMode && state.quickActionsTarget == null && state.mode !is HomeUiMode.QuickActions) {
+                        val codePoint = event.utf16CodePoint
+                        val char = if (codePoint > 0) codePoint.toChar() else null
+                        if (char != null && char.isLetterOrDigit()) {
+                            launchSpotlight(char.toString())
+                            return@onPreviewKeyEvent true
+                        }
+                    }
+                }
+                false
+            }
             .pointerInput(
                 onAppLibraryPage,
                 isEditMode,
@@ -416,7 +482,7 @@ fun HomeScreen(
                                 if (isTopRightZone && state.settings.topRightControlPanelEnabled) {
                                     onOpenControlPanel()
                                 } else if (state.settings.swipeDownSpotlightEnabled) {
-                                    onOpenSpotlight()
+                                    launchSpotlight()
                                 }
                                 break
                             } else if (totalDy < -32.dp.toPx()) {
@@ -426,7 +492,7 @@ fun HomeScreen(
                                             scope.launch { pagerState.animateScrollToPage(workspacePages.size) }
                                         }
                                     }
-                                    SwipeUpAction.SPOTLIGHT -> onOpenSpotlight()
+                                    SwipeUpAction.SPOTLIGHT -> launchSpotlight()
                                     SwipeUpAction.NONE -> Unit
                                 }
                                 break
@@ -457,6 +523,7 @@ fun HomeScreen(
                             onClick = {
                                 focusManager.clearFocus(force = true)
                                 keyboardController?.hide()
+                                runCatching { homeFocusRequester.requestFocus() }
                                 if (isEditMode && !isDragging) {
                                     viewModel.exitEditMode()
                                 }
@@ -464,7 +531,7 @@ fun HomeScreen(
                             onLongClick = {
                                 if (!isEditMode) {
                                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    viewModel.enterEditMode()
+                                    tryEnterEditMode()
                                 }
                             },
                         )
@@ -569,11 +636,15 @@ fun HomeScreen(
                                     }
                                     if (!hasRow0Item) {
                                         SmartGlanceHeader(
-                                            onOpenSearch = onOpenSpotlight,
+                                            onOpenSearch = { launchSpotlight() },
                                             isEditMode = isEditMode,
                                             onDelete = {
-                                                viewModel.removeSmartHeader()
-                                                onShowMessage(smartGlanceRemovedNotice)
+                                                if (state.settings.desktopLocked) {
+                                                    onShowMessage(lockedNotice)
+                                                } else {
+                                                    viewModel.removeSmartHeader()
+                                                    onShowMessage(smartGlanceRemovedNotice)
+                                                }
                                             },
                                             modifier = Modifier
                                                 .offset(x = 0.dp, y = 0.dp)
@@ -609,34 +680,58 @@ fun HomeScreen(
                                     val isBeingDragged = activeDrag?.draggedItemId == item.id
                                     val isHoverTarget = hoveredItemId == item.id && !isBeingDragged
 
-                                    val a11yActions = remember(item.id, isEditMode) {
+                                    val a11yActions = remember(item.id, isEditMode, state.settings.desktopLocked) {
                                         listOf(
                                             CustomAccessibilityAction(a11yLeft) {
-                                                viewModel.moveItemByAccessibility(item, -1, 0, defaultFolderTitle)
+                                                if (state.settings.desktopLocked) {
+                                                    onShowMessage(lockedNotice)
+                                                } else {
+                                                    viewModel.moveItemByAccessibility(item, -1, 0, defaultFolderTitle)
+                                                }
                                                 true
                                             },
                                             CustomAccessibilityAction(a11yRight) {
-                                                viewModel.moveItemByAccessibility(item, 1, 0, defaultFolderTitle)
+                                                if (state.settings.desktopLocked) {
+                                                    onShowMessage(lockedNotice)
+                                                } else {
+                                                    viewModel.moveItemByAccessibility(item, 1, 0, defaultFolderTitle)
+                                                }
                                                 true
                                             },
                                             CustomAccessibilityAction(a11yUp) {
-                                                viewModel.moveItemByAccessibility(item, 0, -1, defaultFolderTitle)
+                                                if (state.settings.desktopLocked) {
+                                                    onShowMessage(lockedNotice)
+                                                } else {
+                                                    viewModel.moveItemByAccessibility(item, 0, -1, defaultFolderTitle)
+                                                }
                                                 true
                                             },
                                             CustomAccessibilityAction(a11yDown) {
-                                                viewModel.moveItemByAccessibility(item, 0, 1, defaultFolderTitle)
+                                                if (state.settings.desktopLocked) {
+                                                    onShowMessage(lockedNotice)
+                                                } else {
+                                                    viewModel.moveItemByAccessibility(item, 0, 1, defaultFolderTitle)
+                                                }
                                                 true
                                             },
                                             CustomAccessibilityAction(a11yMoveDialog) {
-                                                moveDialogTarget = item
+                                                if (state.settings.desktopLocked) {
+                                                    onShowMessage(lockedNotice)
+                                                } else {
+                                                    moveDialogTarget = item
+                                                }
                                                 true
                                             },
                                             CustomAccessibilityAction(a11yRemove) {
-                                                viewModel.removeItemFromHome(item.id)
+                                                if (state.settings.desktopLocked) {
+                                                    onShowMessage(lockedNotice)
+                                                } else {
+                                                    viewModel.removeItemFromHome(item.id)
+                                                }
                                                 true
                                             },
                                             CustomAccessibilityAction(a11yEdit) {
-                                                viewModel.enterEditMode()
+                                                tryEnterEditMode()
                                                 true
                                             },
                                         )
@@ -648,9 +743,13 @@ fun HomeScreen(
                                         Modifier.pointerInput(item.id, page.id, cols, rows) {
                                             detectDragGestures(
                                                 onDragStart = { startOffset ->
-                                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                    draggedWindowPos = itemCenterInWindow + startOffset
-                                                    viewModel.beginDrag(item, pageIndex)
+                                                    if (state.settings.desktopLocked) {
+                                                        onShowMessage(lockedNotice)
+                                                    } else {
+                                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                        draggedWindowPos = itemCenterInWindow + startOffset
+                                                        viewModel.beginDrag(item, pageIndex)
+                                                    }
                                                 },
                                                 onDrag = { change, dragAmount ->
                                                     change.consume()
@@ -934,9 +1033,15 @@ fun HomeScreen(
                                                     { if (!isEditMode) onOpenFolder(item.id) },
                                                     {
                                                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                        viewModel.enterEditMode()
+                                                        tryEnterEditMode()
                                                     },
-                                                    { viewModel.removeItemFromHome(item.id) },
+                                                    {
+                                                        if (state.settings.desktopLocked) {
+                                                            onShowMessage(lockedNotice)
+                                                        } else {
+                                                            viewModel.removeItemFromHome(item.id)
+                                                        }
+                                                    },
                                                 )
                                             }
 
@@ -947,7 +1052,7 @@ fun HomeScreen(
                                                     isDragging,
                                                     {
                                                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                        viewModel.enterEditMode()
+                                                        tryEnterEditMode()
                                                     },
                                                     Modifier
                                                         .fillMaxSize()
@@ -962,7 +1067,7 @@ fun HomeScreen(
                                                     isDragging,
                                                     {
                                                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                        viewModel.enterEditMode()
+                                                        tryEnterEditMode()
                                                     },
                                                     Modifier
                                                         .fillMaxSize()
@@ -1003,7 +1108,7 @@ fun HomeScreen(
                                                 scope.launch { pagerState.animateScrollToPage(workspacePages.size) }
                                             }
                                         }
-                                        SwipeUpAction.SPOTLIGHT -> onOpenSpotlight()
+                                        SwipeUpAction.SPOTLIGHT -> launchSpotlight()
                                         SwipeUpAction.NONE -> Unit
                                     }
                                 }
@@ -1055,9 +1160,13 @@ fun HomeScreen(
                                     Modifier.pointerInput(dockItem.id) {
                                         detectDragGestures(
                                             onDragStart = { startOffset ->
-                                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                draggedWindowPos = dockCenterInWindow + startOffset
-                                                viewModel.beginDrag(dockItem, pageIndex = -1)
+                                                if (state.settings.desktopLocked) {
+                                                    onShowMessage(lockedNotice)
+                                                } else {
+                                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    draggedWindowPos = dockCenterInWindow + startOffset
+                                                    viewModel.beginDrag(dockItem, pageIndex = -1)
+                                                }
                                             },
                                             onDrag = { change, dragAmount ->
                                                 change.consume()
@@ -1269,16 +1378,26 @@ fun HomeScreen(
                                             false,
                                             listOf(
                                                 CustomAccessibilityAction(a11yMoveDialog) {
-                                                    moveDialogTarget = dockItem
+                                                    if (state.settings.desktopLocked) {
+                                                        onShowMessage(lockedNotice)
+                                                    } else {
+                                                        moveDialogTarget = dockItem
+                                                    }
                                                     true
                                                 },
                                             ),
                                             { if (!isEditMode) onOpenFolder(dockItem.id) },
                                             {
                                                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                viewModel.enterEditMode()
+                                                tryEnterEditMode()
                                             },
-                                            { viewModel.removeItemFromHome(dockItem.id) },
+                                            {
+                                                if (state.settings.desktopLocked) {
+                                                    onShowMessage(lockedNotice)
+                                                } else {
+                                                    viewModel.removeItemFromHome(dockItem.id)
+                                                }
+                                            },
                                         )
                                     }
 
@@ -1495,8 +1614,12 @@ fun HomeScreen(
                                 }
                                 IconButton(
                                     onClick = {
-                                        viewModel.pinAppShortcut(sc) { ok ->
-                                            onShowMessage(if (ok) addedNotice else fullNotice)
+                                        if (state.settings.desktopLocked) {
+                                            onShowMessage(lockedNotice)
+                                        } else {
+                                            viewModel.pinAppShortcut(sc) { ok ->
+                                                onShowMessage(if (ok) addedNotice else fullNotice)
+                                            }
                                         }
                                     },
                                 ) {
@@ -1511,16 +1634,24 @@ fun HomeScreen(
 
                         QuickMenuActionRow(stringResource(R.string.quick_action_edit_home)) {
                             viewModel.dismissQuickActions()
-                            viewModel.enterEditMode()
+                            tryEnterEditMode()
                         }
                         QuickMenuActionRow(stringResource(R.string.a11y_move_dialog)) {
                             val itemRef = qaTarget.item
                             viewModel.dismissQuickActions()
-                            moveDialogTarget = itemRef
+                            if (state.settings.desktopLocked) {
+                                onShowMessage(lockedNotice)
+                            } else {
+                                moveDialogTarget = itemRef
+                            }
                         }
                         QuickMenuActionRow(stringResource(R.string.quick_action_remove_home)) {
                             viewModel.dismissQuickActions()
-                            viewModel.removeItemFromHome(qaTarget.item.id)
+                            if (state.settings.desktopLocked) {
+                                onShowMessage(lockedNotice)
+                            } else {
+                                viewModel.removeItemFromHome(qaTarget.item.id)
+                            }
                         }
 
                         if (qaTarget.item is WorkspaceItem.App) {

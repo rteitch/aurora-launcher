@@ -34,6 +34,8 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
@@ -77,6 +79,7 @@ import app.aurora.launcher.core.model.ComponentKey
 import app.aurora.launcher.core.model.LauncherSettings
 import app.aurora.launcher.core.model.LibraryGroup
 import app.aurora.launcher.core.model.PageId
+import app.aurora.launcher.core.model.ProfileBadge
 import app.aurora.launcher.core.model.SpotlightSearchEngine
 import app.aurora.launcher.core.model.WorkspacePage
 import app.aurora.launcher.core.platform.IconCacheAndLoader
@@ -103,6 +106,9 @@ data class AppLibraryUiState(
     val alphabeticalSections: List<Pair<String, List<AppEntry>>> = emptyList(),
     val filterQuery: String = "",
     val isPrivateSpaceLocked: Boolean = false,
+    val hasWorkProfile: Boolean = false,
+    val isWorkProfilePaused: Boolean = false,
+    val workProfileUserSerial: Long? = null,
     val settings: LauncherSettings = LauncherSettings(),
 )
 
@@ -173,6 +179,11 @@ class AppLibraryViewModel @Inject constructor(
             .sortedBy { if (it.key == "#") "ZZZ" else it.key }
             .map { it.key to it.value }
 
+        val hasWork = allApps.any { it.profileBadge == ProfileBadge.WORK }
+        val workApp = allApps.firstOrNull { it.profileBadge == ProfileBadge.WORK }
+        val isWorkPaused = workApp?.isQuietModePaused ?: false
+        val workSerial = workApp?.key?.userSerial
+
         AppLibraryUiState(
             visibleApps = filtered,
             recentlyAdded = recent.filter { !it.isHidden }.take(8),
@@ -181,6 +192,9 @@ class AppLibraryViewModel @Inject constructor(
             alphabeticalSections = alphaSections,
             filterQuery = filter,
             isPrivateSpaceLocked = isPrivateLocked,
+            hasWorkProfile = hasWork,
+            isWorkProfilePaused = isWorkPaused,
+            workProfileUserSerial = workSerial,
             settings = settings,
         )
     }.stateIn(
@@ -193,11 +207,22 @@ class AppLibraryViewModel @Inject constructor(
         return launcherAppsGateway.requestUnlockPrivateSpace()
     }
 
+    fun setWorkProfileQuietMode(enabled: Boolean): Boolean {
+        val serial = uiState.value.workProfileUserSerial ?: return false
+        return launcherAppsGateway.setQuietModeEnabled(serial, enabled)
+    }
+
+    fun setWorkQuietMode(enabled: Boolean): Boolean = setWorkProfileQuietMode(enabled)
+
     fun updateFilter(query: String) {
         filterFlow.value = query
     }
 
     fun addAppToWorkspace(app: AppEntry, isTablet: Boolean, onResult: (Boolean) -> Unit) {
+        if (uiState.value.settings.desktopLocked) {
+            onResult(false)
+            return
+        }
         viewModelScope.launch {
             val spec = uiState.value.settings.effectiveGridSpec(isTablet)
             val added = workspaceRepository.addAppToHome(app.key, spec)
@@ -211,6 +236,10 @@ class AppLibraryViewModel @Inject constructor(
         isTablet: Boolean,
         onResult: (Boolean) -> Unit,
     ) {
+        if (uiState.value.settings.desktopLocked) {
+            onResult(false)
+            return
+        }
         viewModelScope.launch {
             val spec = uiState.value.settings.effectiveGridSpec(isTablet)
             val added = workspaceRepository.addAppToSpecificPage(app.key, pageId, spec)
@@ -223,6 +252,10 @@ class AppLibraryViewModel @Inject constructor(
         isTablet: Boolean,
         onResult: (Boolean) -> Unit,
     ) {
+        if (uiState.value.settings.desktopLocked) {
+            onResult(false)
+            return
+        }
         viewModelScope.launch {
             val spec = uiState.value.settings.effectiveGridSpec(isTablet)
             val newPageId = workspaceRepository.addPage(spec)
@@ -309,6 +342,8 @@ fun AppLibraryPage(
 
     val addedMsg = stringResource(R.string.home_grid_added_notice)
     val fullMsg = stringResource(R.string.home_grid_full_notice)
+    val lockedMsg = stringResource(R.string.home_grid_locked_notice)
+    var selectedProfileTab by rememberSaveable { mutableStateOf(0) }
 
     // Solid high-contrast surfaces per DESIGN.md and antislop R-10 (glass reserved for Dock and active modal overlays).
     Column(
@@ -389,37 +424,128 @@ fun AppLibraryPage(
             modifier = Modifier.fillMaxWidth(),
         )
 
-        if (state.visibleApps.isEmpty()) {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(AuroraSpacing.xs),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(AuroraRadii.card))
-                    .background(palette.surface)
-                    .border(1.dp, palette.outline.copy(alpha = 0.25f), RoundedCornerShape(AuroraRadii.card))
-                    .padding(AuroraSpacing.lg),
+        if (state.hasWorkProfile) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = stringResource(R.string.library_empty_title),
-                    style = AuroraTypography.titleMedium,
-                    color = palette.onSurface,
-                )
-                Text(
-                    text = stringResource(R.string.library_empty_body),
-                    style = AuroraTypography.bodyMedium,
-                    color = palette.onSurfaceSecondary,
-                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(AuroraSpacing.xs),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(AuroraRadii.input))
+                        .background(palette.surfaceVariant)
+                        .padding(2.dp),
+                ) {
+                    LibraryModeTab(
+                        label = stringResource(R.string.library_tab_personal),
+                        selected = selectedProfileTab == 0,
+                        onClick = { selectedProfileTab = 0 },
+                    )
+                    LibraryModeTab(
+                        label = stringResource(R.string.library_tab_work),
+                        selected = selectedProfileTab == 1,
+                        onClick = { selectedProfileTab = 1 },
+                    )
+                }
+
+                if (selectedProfileTab == 1 || state.isWorkProfilePaused) {
+                    TextButton(
+                        onClick = {
+                            val targetQuiet = !state.isWorkProfilePaused
+                            viewModel.setWorkProfileQuietMode(targetQuiet)
+                        },
+                    ) {
+                        Text(
+                            text = if (state.isWorkProfilePaused) {
+                                stringResource(R.string.library_work_turn_on)
+                            } else {
+                                stringResource(R.string.library_work_pause)
+                            },
+                            style = AuroraTypography.labelMedium,
+                            color = palette.accent,
+                        )
+                    }
+                }
+            }
+        }
+
+        val profileFilter: (AppEntry) -> Boolean = { app ->
+            if (state.hasWorkProfile) {
+                if (selectedProfileTab == 1) {
+                    app.profileBadge == ProfileBadge.WORK
+                } else {
+                    app.profileBadge != ProfileBadge.WORK
+                }
+            } else {
+                true
+            }
+        }
+        val displayedApps = remember(state.visibleApps, state.hasWorkProfile, selectedProfileTab) {
+            state.visibleApps.filter(profileFilter)
+        }
+
+        if (displayedApps.isEmpty()) {
+            if (selectedProfileTab == 1 && state.isWorkProfilePaused) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(AuroraSpacing.sm),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(AuroraRadii.card))
+                        .background(palette.surface)
+                        .border(1.dp, palette.outline.copy(alpha = 0.25f), RoundedCornerShape(AuroraRadii.card))
+                        .padding(AuroraSpacing.lg),
+                ) {
+                    Text(
+                        text = stringResource(R.string.library_work_paused_title),
+                        style = AuroraTypography.titleMedium,
+                        color = palette.onSurface,
+                    )
+                    Button(
+                        onClick = { viewModel.setWorkProfileQuietMode(false) },
+                        shape = RoundedCornerShape(AuroraRadii.input),
+                    ) {
+                        Text(stringResource(R.string.library_work_turn_on))
+                    }
+                }
+            } else {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(AuroraSpacing.xs),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(AuroraRadii.card))
+                        .background(palette.surface)
+                        .border(1.dp, palette.outline.copy(alpha = 0.25f), RoundedCornerShape(AuroraRadii.card))
+                        .padding(AuroraSpacing.lg),
+                ) {
+                    Text(
+                        text = stringResource(R.string.library_empty_title),
+                        style = AuroraTypography.titleMedium,
+                        color = palette.onSurface,
+                    )
+                    Text(
+                        text = stringResource(R.string.library_empty_body),
+                        style = AuroraTypography.bodyMedium,
+                        color = palette.onSurfaceSecondary,
+                    )
+                }
             }
         } else if (!showAlphabetical && state.filterQuery.isBlank()) {
             val cards = buildList<Pair<String, List<AppEntry>>> {
-                if (state.recentlyAdded.isNotEmpty()) {
-                    add(stringResource(R.string.library_group_recently_added) to state.recentlyAdded)
+                val recentFiltered = state.recentlyAdded.filter(profileFilter)
+                if (recentFiltered.isNotEmpty()) {
+                    add(stringResource(R.string.library_group_recently_added) to recentFiltered)
                 }
-                if (state.frequentlyUsed.isNotEmpty()) {
-                    add(stringResource(R.string.library_group_frequently_used) to state.frequentlyUsed)
+                val frequentFiltered = state.frequentlyUsed.filter(profileFilter)
+                if (frequentFiltered.isNotEmpty()) {
+                    add(stringResource(R.string.library_group_frequently_used) to frequentFiltered)
                 }
                 for ((group, apps) in state.grouped) {
-                    add(localizedGroupTitle(group) to apps)
+                    val groupFiltered = apps.filter(profileFilter)
+                    if (groupFiltered.isNotEmpty()) {
+                        add(localizedGroupTitle(group) to groupFiltered)
+                    }
                 }
             }
 
@@ -477,12 +603,15 @@ fun AppLibraryPage(
                 }
             }
         } else {
+            val effectiveAlphaSections = remember(state.alphabeticalSections, state.hasWorkProfile, selectedProfileTab) {
+                state.alphabeticalSections.map { (sec, apps) -> sec to apps.filter(profileFilter) }.filter { it.second.isNotEmpty() }
+            }
             LazyColumn(
                 contentPadding = PaddingValues(bottom = AuroraSpacing.xl),
                 verticalArrangement = Arrangement.spacedBy(AuroraSpacing.xs),
                 modifier = Modifier.fillMaxSize(),
             ) {
-                for ((section, apps) in state.alphabeticalSections) {
+                for ((section, apps) in effectiveAlphaSections) {
                     item(key = "sec_$section") {
                         Text(
                             text = section,
@@ -614,7 +743,11 @@ fun AppLibraryPage(
                     ActionSheetRow(stringResource(R.string.quick_action_add_to_home)) {
                         val target = currentActionApp
                         actionTargetApp = null
-                        pageSelectTargetApp = target
+                        if (state.settings.desktopLocked) {
+                            onShowMessage(lockedMsg)
+                        } else {
+                            pageSelectTargetApp = target
+                        }
                     }
                     ActionSheetRow(stringResource(R.string.quick_action_category_override)) {
                         actionTargetApp = null
@@ -666,8 +799,12 @@ fun AppLibraryPage(
                             label = stringResource(R.string.library_select_page_item, idx + 1),
                         ) {
                             pageSelectTargetApp = null
-                            viewModel.addAppToSpecificPage(selectingApp, page.id, isTabletViewport) { ok ->
-                                onShowMessage(if (ok) addedMsg else fullMsg)
+                            if (state.settings.desktopLocked) {
+                                onShowMessage(lockedMsg)
+                            } else {
+                                viewModel.addAppToSpecificPage(selectingApp, page.id, isTabletViewport) { ok ->
+                                    onShowMessage(if (ok) addedMsg else fullMsg)
+                                }
                             }
                         }
                     }
@@ -675,8 +812,12 @@ fun AppLibraryPage(
                         label = stringResource(R.string.library_select_page_new),
                     ) {
                         pageSelectTargetApp = null
-                        viewModel.addAppToNewPage(selectingApp, isTabletViewport) { ok ->
-                            onShowMessage(if (ok) addedMsg else fullMsg)
+                        if (state.settings.desktopLocked) {
+                            onShowMessage(lockedMsg)
+                        } else {
+                            viewModel.addAppToNewPage(selectingApp, isTabletViewport) { ok ->
+                                onShowMessage(if (ok) addedMsg else fullMsg)
+                            }
                         }
                     }
                 }

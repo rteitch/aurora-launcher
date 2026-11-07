@@ -231,4 +231,57 @@ class HomeViewModelTest {
 
         assertTrue(workspaceRepo.dropAndPackCallCount >= 1)
     }
+
+    @Test
+    fun `desktopLocked prevents enterEditMode beginDrag and page modifications`() = runTest(testDispatcher) {
+        val settingsRepo = FakeSettingsRepository()
+        settingsRepo.updateSettings { it.copy(desktopLocked = true) }
+        val viewModel = createViewModel(settingsRepo = settingsRepo)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect()
+        }
+        advanceUntilIdle()
+
+        assertEquals(HomeUiMode.Normal, viewModel.uiState.value.mode)
+        viewModel.enterEditMode()
+        advanceUntilIdle()
+        assertEquals(HomeUiMode.Normal, viewModel.uiState.value.mode)
+
+        val item = sampleSnapshot.pages[0].items[0]
+        viewModel.beginDrag(item, 0)
+        advanceUntilIdle()
+        assertEquals(HomeUiMode.Normal, viewModel.uiState.value.mode)
+
+        viewModel.addNewPage()
+        advanceUntilIdle()
+        assertEquals(1, viewModel.uiState.value.workspace.pages.size)
+    }
+
+    @Test
+    fun `desktopLocked prevents completeDrop undo redo and removeSmartHeader`() = runTest(testDispatcher) {
+        val settingsRepo = FakeSettingsRepository()
+        settingsRepo.updateSettings { it.copy(desktopLocked = true, showSmartHeaderOnPage1 = true) }
+        val workspaceRepo = FakeWorkspaceRepository(sampleSnapshot)
+        val viewModel = createViewModel(settingsRepo = settingsRepo, workspaceRepo = workspaceRepo)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect()
+        }
+        advanceUntilIdle()
+
+        var dropRejected = false
+        val item = sampleSnapshot.pages[0].items[0]
+        viewModel.completeDrop(
+            draggedItemId = item.id,
+            target = DropTarget.DesktopCell(PageId(1L), 3, 3),
+            defaultFolderTitle = "Folder",
+            onRejected = { dropRejected = true },
+        )
+        advanceUntilIdle()
+        assertTrue(dropRejected)
+
+        viewModel.removeSmartHeader()
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.settings.showSmartHeaderOnPage1)
+    }
 }
+

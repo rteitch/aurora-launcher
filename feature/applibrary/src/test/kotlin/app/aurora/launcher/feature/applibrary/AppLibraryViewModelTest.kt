@@ -148,4 +148,71 @@ class AppLibraryViewModelTest {
         assertTrue(viewModel.uiState.value.isPrivateSpaceLocked)
         assertFalse(viewModel.unlockPrivateSpace())
     }
+
+    @Test
+    fun `work profile apps activate hasWorkProfile and quiet mode toggles workProfileQuietMode`() = runTest(testDispatcher) {
+        val workApp = appA.copy(
+            key = ComponentKey("com.work.app", "Main", 10L),
+            profileBadge = app.aurora.launcher.core.model.ProfileBadge.WORK,
+        )
+        val appCatalog = FakeAppCatalogRepository(listOf(appA, workApp))
+        val workspaceRepo = FakeWorkspaceRepository()
+        val settingsRepo = FakeSettingsRepository()
+        val gateway = FakeLauncherAppsGateway()
+        val iconLoader = IconCacheAndLoader()
+
+        val viewModel = AppLibraryViewModel(
+            appCatalogRepository = appCatalog,
+            workspaceRepository = workspaceRepo,
+            settingsRepository = settingsRepo,
+            launcherAppsGateway = gateway,
+            iconLoader = iconLoader,
+        )
+
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect()
+        }
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.hasWorkProfile)
+
+        val success = viewModel.setWorkQuietMode(true)
+        advanceUntilIdle()
+        assertTrue(success)
+        assertEquals(1, gateway.quietModeSettings.size)
+        assertEquals(10L to true, gateway.quietModeSettings.first())
+    }
+
+    @Test
+    fun `addAppToWorkspace fails when desktop is locked`() = runTest(testDispatcher) {
+        val appCatalog = FakeAppCatalogRepository(listOf(appA))
+        val workspaceRepo = FakeWorkspaceRepository()
+        val settingsRepo = FakeSettingsRepository()
+        settingsRepo.updateSettings { it.copy(desktopLocked = true) }
+        val gateway = FakeLauncherAppsGateway()
+        val iconLoader = IconCacheAndLoader()
+
+        val viewModel = AppLibraryViewModel(
+            appCatalogRepository = appCatalog,
+            workspaceRepository = workspaceRepo,
+            settingsRepository = settingsRepo,
+            launcherAppsGateway = gateway,
+            iconLoader = iconLoader,
+        )
+
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect()
+        }
+        advanceUntilIdle()
+
+        var addResult: Boolean? = null
+        viewModel.addAppToWorkspace(appA, isTablet = false) { ok ->
+            addResult = ok
+        }
+        advanceUntilIdle()
+
+        assertFalse(addResult == true)
+    }
 }
+
+

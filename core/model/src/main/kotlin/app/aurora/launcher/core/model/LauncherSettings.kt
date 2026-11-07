@@ -87,6 +87,8 @@ data class LauncherSettings(
     val biometricAppLockEnabled: Boolean = false,
     val lightModeForced: Boolean = false,
     val reduceMotionOverride: Boolean? = null,
+    val desktopLocked: Boolean = false,
+    val potatoModeEnabled: Boolean = false,
 ) {
     fun effectiveGridSpec(isTabletViewport: Boolean): GridSpec {
         val preset = if (isTabletViewport && adaptiveTabletGrid && gridPreset == GridPreset.GRID_4X6) {
@@ -108,7 +110,7 @@ data class LauncherSettings(
         isPowerSaveMode: Boolean,
         isLiveWallpaperActive: Boolean,
     ): GlassTier {
-        if (lightModeForced || glassIntensity == GlassIntensity.OFF || isLowRamDevice || isPowerSaveMode || isLiveWallpaperActive) {
+        if (potatoModeEnabled || lightModeForced || glassIntensity == GlassIntensity.OFF || isLowRamDevice || isPowerSaveMode || isLiveWallpaperActive) {
             return GlassTier.TIER_C_SOLID
         }
         return when {

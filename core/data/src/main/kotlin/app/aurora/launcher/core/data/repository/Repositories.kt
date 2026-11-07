@@ -89,7 +89,9 @@ interface SearchHistoryRepository {
 }
 
 interface BackupRepository {
-    suspend fun exportBackupJson(currentSettings: LauncherSettings): String
-    suspend fun importBackupJson(rawJson: String): SystemResult<Int>
+    suspend fun exportBackupJson(currentSettings: LauncherSettings): String = exportBackupJson(currentSettings, null)
+    suspend fun exportBackupJson(currentSettings: LauncherSettings, passphrase: String?): String
+    suspend fun importBackupJson(rawJson: String): SystemResult<Int> = importBackupJson(rawJson, null)
+    suspend fun importBackupJson(rawJson: String, passphrase: String?): SystemResult<Int>
     suspend fun wipeAllLocalData(): List<AppWidgetId>
 }

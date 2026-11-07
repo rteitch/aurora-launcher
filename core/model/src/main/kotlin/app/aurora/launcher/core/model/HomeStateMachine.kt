@@ -24,7 +24,7 @@ sealed interface HomeUiMode {
 sealed interface ShellOverlay {
     data object None : ShellOverlay
     data class Folder(val folderId: ItemId, val isRenaming: Boolean = false) : ShellOverlay
-    data object Spotlight : ShellOverlay
+    data class Spotlight(val initialQuery: String = "") : ShellOverlay
     data object WidgetPicker : ShellOverlay
     data object ControlPanel : ShellOverlay
     data object Settings : ShellOverlay

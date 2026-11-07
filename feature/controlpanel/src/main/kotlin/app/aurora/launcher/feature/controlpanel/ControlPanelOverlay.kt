@@ -1,5 +1,6 @@
 package app.aurora.launcher.feature.controlpanel
 
+import android.content.ComponentCallbacks2
 import android.view.KeyEvent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -25,6 +26,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Bluetooth
 import androidx.compose.material.icons.outlined.BrightnessMedium
 import androidx.compose.material.icons.outlined.Close
@@ -55,6 +57,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -71,6 +74,7 @@ import app.aurora.launcher.core.designsystem.auroraFocusRing
 import app.aurora.launcher.core.model.GlassTier
 import app.aurora.launcher.core.platform.ControlPanelGateway
 import app.aurora.launcher.core.platform.ControlPanelSnapshot
+import app.aurora.launcher.core.platform.IconCacheAndLoader
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.StateFlow
 import javax.inject.Inject
@@ -79,8 +83,19 @@ import kotlin.math.roundToInt
 @HiltViewModel
 class ControlPanelViewModel @Inject constructor(
     private val gateway: ControlPanelGateway,
+    val iconLoader: IconCacheAndLoader = IconCacheAndLoader(),
 ) : ViewModel() {
     val state: StateFlow<ControlPanelSnapshot> = gateway.state
+
+    fun boostRam(): Long {
+        val runtime = Runtime.getRuntime()
+        val memBefore = runtime.totalMemory() - runtime.freeMemory()
+        iconLoader.trimMemory(ComponentCallbacks2.TRIM_MEMORY_COMPLETE)
+        System.gc()
+        val memAfter = runtime.totalMemory() - runtime.freeMemory()
+        val freedBytes = (memBefore - memAfter).coerceAtLeast(0L)
+        return (freedBytes / (1024L * 1024L)).coerceAtLeast(1L)
+    }
 
     fun refresh() = gateway.refreshSnapshot()
     fun toggleTorch() = gateway.toggleTorch()
@@ -102,11 +117,13 @@ fun ControlPanelOverlay(
     glassTier: GlassTier,
     onDismiss: () -> Unit,
     onOpenLauncherSettings: () -> Unit,
+    onShowMessage: (String) -> Unit = {},
     viewModel: ControlPanelViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val palette = AuroraTheme.palette
     val reduceMotion = AuroraTheme.reduceMotion
+    val context = LocalContext.current
 
     LaunchedEffect(visible) {
         if (visible) viewModel.refresh()
@@ -228,6 +245,22 @@ fun ControlPanelOverlay(
                             onClick = { viewModel.toggleTorch() },
                             modifier = Modifier.weight(1f),
                         )
+                        ControlTileButton(
+                            icon = Icons.Outlined.AutoAwesome,
+                            label = stringResource(R.string.control_ram_boost),
+                            active = false,
+                            onClick = {
+                                val freedMb = viewModel.boostRam()
+                                onShowMessage(context.getString(R.string.control_ram_boost_done, freedMb))
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(AuroraSpacing.sm),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
                         ControlTileButton(
                             icon = Icons.Outlined.DoNotDisturbOn,
                             label = stringResource(R.string.control_dnd),

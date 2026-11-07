@@ -380,16 +380,24 @@ open class LauncherAppsGateway(
         }.getOrNull() ?: false
     }
 
-    open fun requestUnpauseQuietMode(userSerial: Long): Boolean {
-        return safeSystemCall {
+    open fun setQuietModeEnabled(userSerial: Long, enabled: Boolean): Boolean {
+        return try {
             val handle = resolveUserHandle(userSerial)
-            if (userManager?.isQuietModeEnabled(handle) == true) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    return@safeSystemCall userManager?.requestQuietModeEnabled(false, handle) == true
-                }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                userManager?.requestQuietModeEnabled(enabled, handle) == true
+            } else {
+                false
             }
+        } catch (e: SecurityException) {
+            // Thrown if launcher is not the default home app or lacks permission
             false
-        }.getOrNull() ?: false
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    open fun requestUnpauseQuietMode(userSerial: Long): Boolean {
+        return setQuietModeEnabled(userSerial, false)
     }
 
     private fun mapActivityToAppEntry(

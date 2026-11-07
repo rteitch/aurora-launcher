@@ -33,6 +33,7 @@ class FakeSettingsRepository(
     initial: LauncherSettings = LauncherSettings(),
 ) : LauncherSettingsRepository {
     private val state = MutableStateFlow(initial)
+    val currentSettings: LauncherSettings get() = state.value
     override val settings: Flow<LauncherSettings> = state
     override suspend fun updateSettings(transform: (LauncherSettings) -> LauncherSettings) {
         state.update(transform)
@@ -237,8 +238,19 @@ class FakeWorkspaceRepository(
 }
 
 class FakeBackupRepository : BackupRepository {
-    override suspend fun exportBackupJson(currentSettings: LauncherSettings): String = "{}"
-    override suspend fun importBackupJson(rawJson: String): SystemResult<Int> = SystemResult.Success(0)
+    var lastExportPassphrase: String? = null
+    var lastImportPassphrase: String? = null
+
+    override suspend fun exportBackupJson(currentSettings: LauncherSettings, passphrase: String?): String {
+        lastExportPassphrase = passphrase
+        return "{}"
+    }
+
+    override suspend fun importBackupJson(rawJson: String, passphrase: String?): SystemResult<Int> {
+        lastImportPassphrase = passphrase
+        return SystemResult.Success(0)
+    }
+
     override suspend fun wipeAllLocalData(): List<AppWidgetId> = emptyList()
 }
 
@@ -249,10 +261,16 @@ class FakeLauncherAppsGateway(
     val openedAppInfos: MutableList<ComponentKey> = mutableListOf(),
     val requestedUninstalls: MutableList<ComponentKey> = mutableListOf(),
     val requestedQuietModeUnpauses: MutableList<Long> = mutableListOf(),
+    val quietModeSettings: MutableList<Pair<Long, Boolean>> = mutableListOf(),
 ) : app.aurora.launcher.core.platform.LauncherAppsGateway() {
-    override fun requestUnpauseQuietMode(userSerial: Long): Boolean {
-        requestedQuietModeUnpauses.add(userSerial)
+    override fun setQuietModeEnabled(userSerial: Long, enabled: Boolean): Boolean {
+        quietModeSettings.add(userSerial to enabled)
+        if (!enabled) requestedQuietModeUnpauses.add(userSerial)
         return true
+    }
+
+    override fun requestUnpauseQuietMode(userSerial: Long): Boolean {
+        return setQuietModeEnabled(userSerial, false)
     }
 
     override fun launchActivity(key: ComponentKey, sourceBounds: android.graphics.Rect?): SystemResult<Unit> {

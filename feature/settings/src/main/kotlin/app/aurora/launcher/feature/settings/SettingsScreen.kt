@@ -33,12 +33,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.foundation.focusable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -53,11 +55,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -73,6 +83,7 @@ import app.aurora.launcher.core.common.AuroraDispatchers
 import app.aurora.launcher.core.common.SystemResult
 import app.aurora.launcher.core.common.safeSystemCall
 import app.aurora.launcher.core.data.repository.AppCatalogRepository
+import app.aurora.launcher.core.data.repository.BackupCryptoEngine
 import app.aurora.launcher.core.data.repository.BackupRepository
 import app.aurora.launcher.core.data.repository.LauncherSettingsRepository
 import app.aurora.launcher.core.data.repository.SnapshotSummary
@@ -294,9 +305,9 @@ class SettingsViewModel @Inject constructor(
         roleGateway.openHomeLauncherChooser()
     }
 
-    fun exportBackupToUri(uri: Uri, successMsg: String) {
+    fun exportBackupToUri(uri: Uri, successMsg: String, passphrase: String? = null) {
         viewModelScope.launch {
-            val json = backupRepository.exportBackupJson(uiState.value.settings)
+            val json = backupRepository.exportBackupJson(uiState.value.settings, passphrase)
             val writeRes = withContext(dispatchers.io) {
                 val ctx = context ?: return@withContext SystemResult.Failure("No context available")
                 safeSystemCall("exportBackup") {
@@ -314,8 +325,10 @@ class SettingsViewModel @Inject constructor(
 
     fun importBackupFromUri(
         uri: Uri,
+        passphrase: String? = null,
         onSuccessFormat: (Int) -> String,
         onErrorFormat: (String) -> String,
+        onNeedsPassphrase: ((String) -> Unit)? = null,
     ) {
         viewModelScope.launch {
             val rawRes = withContext(dispatchers.io) {
@@ -342,14 +355,30 @@ class SettingsViewModel @Inject constructor(
                     bannerFlow.value = onErrorFormat(rawRes.reason) to false
                 }
                 is SystemResult.Success -> {
-                    when (val imported = backupRepository.importBackupJson(rawRes.data)) {
-                        is SystemResult.Success -> {
-                            bannerFlow.value = onSuccessFormat(imported.data) to false
-                        }
-                        is SystemResult.Failure -> {
-                            bannerFlow.value = onErrorFormat(imported.reason) to false
-                        }
+                    val rawJson = rawRes.data
+                    if (BackupCryptoEngine.isEncrypted(rawJson) && passphrase.isNullOrBlank() && onNeedsPassphrase != null) {
+                        onNeedsPassphrase(rawJson)
+                        return@launch
                     }
+                    importBackupRawJson(rawJson, passphrase, onSuccessFormat, onErrorFormat)
+                }
+            }
+        }
+    }
+
+    fun importBackupRawJson(
+        rawJson: String,
+        passphrase: String?,
+        onSuccessFormat: (Int) -> String,
+        onErrorFormat: (String) -> String,
+    ) {
+        viewModelScope.launch {
+            when (val imported = backupRepository.importBackupJson(rawJson, passphrase)) {
+                is SystemResult.Success -> {
+                    bannerFlow.value = onSuccessFormat(imported.data) to false
+                }
+                is SystemResult.Failure -> {
+                    bannerFlow.value = onErrorFormat(imported.reason) to false
                 }
             }
         }
@@ -449,6 +478,16 @@ private fun SettingsMainContent(
     val hostView = LocalView.current
 
     var showWipeConfirm by remember { mutableStateOf(false) }
+    var showExportPasswordDialog by remember { mutableStateOf(false) }
+    var exportPassphrase by remember { mutableStateOf("") }
+    var showDecryptDialog by remember { mutableStateOf(false) }
+    var decryptPassphrase by remember { mutableStateOf("") }
+    var pendingImportRawJson by remember { mutableStateOf<String?>(null) }
+
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
 
     // Protect destructive wipe confirmation against tapjacking overlays (section 11.3).
     DisposableEffect(showWipeConfirm) {
@@ -472,7 +511,11 @@ private fun SettingsMainContent(
     val exportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/json"),
     ) { uri ->
-        if (uri != null) viewModel.exportBackupToUri(uri, exportedLabel)
+        if (uri != null) {
+            val pass = exportPassphrase.takeIf { it.isNotBlank() }
+            viewModel.exportBackupToUri(uri, exportedLabel, pass)
+        }
+        exportPassphrase = ""
     }
 
     val importLauncher = rememberLauncherForActivityResult(
@@ -481,8 +524,14 @@ private fun SettingsMainContent(
         if (uri != null) {
             viewModel.importBackupFromUri(
                 uri = uri,
+                passphrase = null,
                 onSuccessFormat = { count -> resources.getString(R.string.settings_backup_imported, count) },
                 onErrorFormat = { err -> resources.getString(R.string.settings_backup_failed, err) },
+                onNeedsPassphrase = { rawJson ->
+                    pendingImportRawJson = rawJson
+                    decryptPassphrase = ""
+                    showDecryptDialog = true
+                },
             )
         }
     }
@@ -493,7 +542,28 @@ private fun SettingsMainContent(
             .fillMaxSize()
             .background(palette.background)
             .statusBarsPadding()
-            .navigationBarsPadding(),
+            .navigationBarsPadding()
+            .focusRequester(focusRequester)
+            .focusable()
+            .onPreviewKeyEvent { ev ->
+                if ((ev.type == KeyEventType.KeyDown || ev.type == KeyEventType.KeyUp) && ev.key == Key.Escape) {
+                    if (ev.type == KeyEventType.KeyDown) {
+                        when {
+                            showExportPasswordDialog -> showExportPasswordDialog = false
+                            showDecryptDialog -> {
+                                showDecryptDialog = false
+                                pendingImportRawJson = null
+                                decryptPassphrase = ""
+                            }
+                            showWipeConfirm -> showWipeConfirm = false
+                            else -> onClose()
+                        }
+                    }
+                    true
+                } else {
+                    false
+                }
+            },
     ) {
         Column(
             modifier = Modifier
@@ -678,6 +748,13 @@ private fun SettingsMainContent(
                                 )
                             }
                         }
+
+                        SettingsSwitchRow(
+                            label = stringResource(R.string.settings_lock_desktop_title),
+                            subtitle = stringResource(R.string.settings_lock_desktop_subtitle),
+                            checked = state.settings.desktopLocked,
+                            onCheckedChange = { v -> viewModel.updateSettings { it.copy(desktopLocked = v) } },
+                        )
 
                         SettingsSwitchRow(
                             label = stringResource(R.string.settings_grid_adaptive_tablet),
@@ -902,7 +979,7 @@ private fun SettingsMainContent(
                 item(key = "grp_backup") {
                     SettingsGroupCard(title = stringResource(R.string.settings_group_backup)) {
                         Button(
-                            onClick = { exportLauncher.launch("aurora-launcher-backup.json") },
+                            onClick = { showExportPasswordDialog = true },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = palette.accent,
                                 contentColor = palette.onAccent,
@@ -990,6 +1067,13 @@ private fun SettingsMainContent(
                 // 7. Performance & Accessibility
                 item(key = "grp_advanced") {
                     SettingsGroupCard(title = stringResource(R.string.settings_group_advanced)) {
+                        SettingsSwitchRow(
+                            label = stringResource(R.string.settings_potato_mode_title),
+                            subtitle = stringResource(R.string.settings_potato_mode_subtitle),
+                            checked = state.settings.potatoModeEnabled,
+                            onCheckedChange = { v -> viewModel.updateSettings { it.copy(potatoModeEnabled = v) } },
+                        )
+
                         SettingsSwitchRow(
                             label = stringResource(R.string.settings_force_light_mode),
                             checked = state.settings.lightModeForced,
@@ -1085,6 +1169,105 @@ private fun SettingsMainContent(
             dismissButton = {
                 TextButton(onClick = { showWipeConfirm = false }) {
                     Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
+
+    if (showExportPasswordDialog) {
+        AlertDialog(
+            onDismissRequest = { showExportPasswordDialog = false },
+            title = { Text(stringResource(R.string.settings_backup_passphrase_title)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(AuroraSpacing.sm)) {
+                    Text(
+                        stringResource(R.string.settings_backup_passphrase_hint),
+                        style = AuroraTypography.bodyMedium,
+                        color = palette.onSurfaceSecondary,
+                    )
+                    OutlinedTextField(
+                        value = exportPassphrase,
+                        onValueChange = { exportPassphrase = it },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showExportPasswordDialog = false
+                        exportLauncher.launch("aurora-launcher-backup.json")
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = palette.accent,
+                        contentColor = palette.onAccent,
+                    ),
+                ) {
+                    Text(stringResource(R.string.action_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExportPasswordDialog = false }) {
+                    Text(stringResource(R.string.action_cancel), color = palette.accent)
+                }
+            },
+        )
+    }
+
+    if (showDecryptDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showDecryptDialog = false
+                pendingImportRawJson = null
+            },
+            title = { Text(stringResource(R.string.settings_backup_decrypt_title)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(AuroraSpacing.sm)) {
+                    Text(
+                        stringResource(R.string.settings_backup_decrypt_prompt),
+                        style = AuroraTypography.bodyMedium,
+                        color = palette.onSurfaceSecondary,
+                    )
+                    OutlinedTextField(
+                        value = decryptPassphrase,
+                        onValueChange = { decryptPassphrase = it },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val raw = pendingImportRawJson
+                        if (raw != null) {
+                            showDecryptDialog = false
+                            viewModel.importBackupRawJson(
+                                rawJson = raw,
+                                passphrase = decryptPassphrase,
+                                onSuccessFormat = { count -> resources.getString(R.string.settings_backup_imported, count) },
+                                onErrorFormat = { err -> resources.getString(R.string.settings_backup_failed, err) },
+                            )
+                            pendingImportRawJson = null
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = palette.accent,
+                        contentColor = palette.onAccent,
+                    ),
+                ) {
+                    Text(stringResource(R.string.action_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showDecryptDialog = false
+                    pendingImportRawJson = null
+                }) {
+                    Text(stringResource(R.string.action_cancel), color = palette.accent)
                 }
             },
         )
@@ -1258,6 +1441,7 @@ private fun SettingsSwitchRow(
     label: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
+    subtitle: String? = null,
 ) {
     val palette = AuroraTheme.palette
     Row(
@@ -1268,14 +1452,24 @@ private fun SettingsSwitchRow(
             .defaultMinSize(minHeight = AuroraSpacing.minTouchTarget)
             .clickable { onCheckedChange(!checked) },
     ) {
-        Text(
-            text = label,
-            style = AuroraTypography.bodyLarge,
-            color = palette.onSurface,
+        Column(
             modifier = Modifier
                 .weight(1f)
                 .padding(end = AuroraSpacing.sm),
-        )
+        ) {
+            Text(
+                text = label,
+                style = AuroraTypography.bodyLarge,
+                color = palette.onSurface,
+            )
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    style = AuroraTypography.bodyMedium,
+                    color = palette.onSurfaceSecondary,
+                )
+            }
+        }
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,

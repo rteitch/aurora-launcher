@@ -234,6 +234,7 @@ private fun LauncherShell(
                 ProceduralWallpaperCanvas(
                     style = state.settings.wallpaperStyle,
                     customWallpaperPath = state.settings.customWallpaperPath,
+                    potatoMode = state.settings.potatoModeEnabled,
                 )
 
                 val currentGridSpec = state.workspace?.gridSpec ?: GridSpec(4, 6, 4)
@@ -337,8 +338,10 @@ private fun LauncherShell(
                 onRemoveChildFromFolder = viewModel::removeChildFromFolder,
             )
 
+            val activeSpotlight = state.overlay as? ShellOverlay.Spotlight
             SpotlightOverlay(
-                visible = state.overlay is ShellOverlay.Spotlight,
+                visible = activeSpotlight != null,
+                initialQuery = activeSpotlight?.initialQuery.orEmpty(),
                 glassTier = state.glassTier,
                 badgeCounts = state.badgeCounts,
                 onDismiss = viewModel::closeOverlay,
@@ -351,6 +354,7 @@ private fun LauncherShell(
                 glassTier = state.glassTier,
                 onDismiss = viewModel::closeOverlay,
                 onOpenLauncherSettings = viewModel::openSettings,
+                onShowMessage = viewModel::showMessage,
             )
 
             WidgetPickerOverlay(
@@ -366,7 +370,7 @@ private fun LauncherShell(
                 runCatching {
                     @Suppress("DEPRECATION")
                     activity.packageManager.getPackageInfo(activity.packageName, 0).versionName
-                }.getOrNull() ?: "1.5.0"
+                }.getOrNull() ?: "1.6.0"
             }
 
             SettingsOverlay(

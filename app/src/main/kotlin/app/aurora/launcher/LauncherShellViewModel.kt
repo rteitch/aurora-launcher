@@ -225,8 +225,8 @@ class LauncherShellViewModel @Inject constructor(
         overlayFlow.value = ShellOverlay.Folder(folderId)
     }
 
-    fun openSpotlight() {
-        overlayFlow.value = ShellOverlay.Spotlight
+    fun openSpotlight(initialQuery: String = "") {
+        overlayFlow.value = ShellOverlay.Spotlight(initialQuery)
     }
 
     fun openControlPanel() {
@@ -234,6 +234,7 @@ class LauncherShellViewModel @Inject constructor(
     }
 
     fun openWidgetPicker(preferredPageId: PageId?) {
+        if (uiState.value.settings.desktopLocked) return
         widgetPageFlow.value = preferredPageId
         overlayFlow.value = ShellOverlay.WidgetPicker
     }

@@ -167,4 +167,44 @@ class SettingsViewModelTest {
 
         assertEquals("com.test.iconpack", viewModel.uiState.value.settings.selectedIconPackPackage)
     }
+
+    @Test
+    fun `desktopLocked and potatoMode toggles update settings state`() = runTest(testDispatcher) {
+        val viewModel = createViewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect()
+        }
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.settings.desktopLocked)
+        assertFalse(viewModel.uiState.value.settings.potatoModeEnabled)
+
+        viewModel.updateSettings { it.copy(desktopLocked = true, potatoModeEnabled = true) }
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.settings.desktopLocked)
+        assertTrue(viewModel.uiState.value.settings.potatoModeEnabled)
+    }
+
+    @Test
+    fun `importBackupRawJson updates banner with restored count`() = runTest(testDispatcher) {
+        val backupRepo = FakeBackupRepository()
+        val viewModel = createViewModel(backupRepo = backupRepo)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect()
+        }
+        advanceUntilIdle()
+
+        viewModel.importBackupRawJson(
+            rawJson = """{"schemaVersion":1}""",
+            passphrase = "test-passphrase",
+            onSuccessFormat = { "Restored $it items" },
+            onErrorFormat = { "Error: $it" },
+        )
+        advanceUntilIdle()
+
+        assertEquals("Restored 0 items", viewModel.uiState.value.statusBanner)
+        assertEquals("test-passphrase", backupRepo.lastImportPassphrase)
+    }
 }
+

@@ -124,4 +124,14 @@ class ControlPanelViewModelTest {
         advanceUntilIdle()
         assertEquals(200, viewModel.state.value.brightness)
     }
+
+    @Test
+    fun `boostRam trims memory and reports freed megabytes`() = runTest(testDispatcher) {
+        val gateway = TestControlPanelGateway()
+        val viewModel = ControlPanelViewModel(gateway)
+
+        val freed = viewModel.boostRam()
+        assertTrue(freed >= 1L)
+    }
 }
+

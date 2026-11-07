@@ -254,4 +254,41 @@ class SpotlightViewModelTest {
         val hiddenApp = appCatalog.allApps.first().first { it.key == app1.key }
         assertTrue(hiddenApp.isHidden)
     }
+
+    @Test
+    fun `addAppToWorkspace returns false when desktop is locked`() = runTest(testDispatcher) {
+        val appCatalog = FakeAppCatalogRepository(listOf(app1, app2))
+        val settingsRepo = FakeSettingsRepository()
+        settingsRepo.updateSettings { it.copy(desktopLocked = true) }
+        val searchHistory = FakeSearchHistoryRepository()
+        val gateway = ContactsAndSettingsSearchGateway()
+        val iconLoader = IconCacheAndLoader()
+        val workspaceRepo = FakeWorkspaceRepository()
+        val launcherGateway = FakeLauncherAppsGateway()
+
+        val viewModel = SpotlightViewModel(
+            appCatalogRepository = appCatalog,
+            settingsRepository = settingsRepo,
+            searchHistoryRepository = searchHistory,
+            contactsAndSettingsGateway = gateway,
+            iconLoader = iconLoader,
+            dispatchers = auroraDispatchers,
+            workspaceRepository = workspaceRepo,
+            launcherAppsGateway = launcherGateway,
+        )
+
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect()
+        }
+        advanceUntilIdle()
+
+        var addSuccess: Boolean? = null
+        viewModel.addAppToWorkspace(app1, isTablet = false) { success ->
+            addSuccess = success
+        }
+        advanceUntilIdle()
+
+        assertEquals(false, addSuccess)
+    }
 }
+

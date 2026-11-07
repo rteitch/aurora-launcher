@@ -25,7 +25,7 @@ class BackupRepositoryImpl @Inject constructor(
     private val settingsRepository: LauncherSettingsRepository,
 ) : BackupRepository {
 
-    override suspend fun exportBackupJson(currentSettings: LauncherSettings): String {
+    override suspend fun exportBackupJson(currentSettings: LauncherSettings, passphrase: String?): String {
         val gridSpec = currentSettings.effectiveGridSpec(isTabletViewport = false)
         val snapshot = workspaceRepository.loadCurrentSnapshot(gridSpec)
         val payload = AuroraBackupPayload(
@@ -41,11 +41,28 @@ class BackupRepositoryImpl @Inject constructor(
                 customWallpaperPath = null,
             ),
         )
-        return BackupPayloadCodec.encode(payload)
+        val encoded = BackupPayloadCodec.encode(payload)
+        return if (!passphrase.isNullOrBlank()) {
+            BackupCryptoEngine.encrypt(encoded, passphrase.toCharArray())
+        } else {
+            encoded
+        }
     }
 
-    override suspend fun importBackupJson(rawJson: String): SystemResult<Int> {
-        val validated = when (val res = BackupPayloadCodec.decodeAndValidate(rawJson)) {
+    override suspend fun importBackupJson(rawJson: String, passphrase: String?): SystemResult<Int> {
+        val jsonToDecode = if (BackupCryptoEngine.isEncrypted(rawJson)) {
+            if (passphrase.isNullOrBlank()) {
+                return SystemResult.Failure("Encrypted backup requires a passphrase")
+            }
+            when (val decRes = BackupCryptoEngine.decrypt(rawJson, passphrase.toCharArray())) {
+                is SystemResult.Success -> decRes.data
+                is SystemResult.Failure -> return decRes
+            }
+        } else {
+            rawJson
+        }
+
+        val validated = when (val res = BackupPayloadCodec.decodeAndValidate(jsonToDecode)) {
             is SystemResult.Success -> res.data
             is SystemResult.Failure -> return res
         }

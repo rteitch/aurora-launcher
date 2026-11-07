@@ -49,6 +49,7 @@
     <string name="home_badge_revoked_notice">Akses notifikasi dimatikan. Lencana angka disembunyikan.</string>
     <string name="home_grid_added_notice">Ditambahkan ke layar utama.</string>
     <string name="home_grid_full_notice">Tidak ada sel kosong yang tersisa di ruang kerja.</string>
+    <string name="home_grid_locked_notice">Tata letak layar utama dikunci di Pengaturan.</string>
 
     <!-- Accessibility custom actions (E23) -->
     <string name="a11y_enter_edit_mode">Edit tata letak layar utama</string>
@@ -293,4 +294,22 @@
     <string name="smart_glance_widget_desc">Jam digital, tanggal, dan pencarian Google</string>
     <string name="smart_glance_removed_notice">Smart Glance dihapus dari halaman 1.</string>
     <string name="smart_glance_delete_cd">Hapus Smart Glance</string>
+
+    <!-- Cycle 2 Enterprise & Performance Strings (Indonesian) -->
+    <string name="settings_lock_desktop_title">Kunci Layar Utama</string>
+    <string name="settings_lock_desktop_subtitle">Cegah memindahkan aplikasi, widget, atau mengubah tata letak</string>
+    <string name="settings_potato_mode_title">Mode Hemat Ekstrem (Potato Mode)</string>
+    <string name="settings_potato_mode_subtitle">Paksa rendering solid, kurangi memori wallpaper, dan maksimalkan performa</string>
+    <string name="control_ram_boost">Segarkan Memori</string>
+    <string name="control_ram_boost_done">Berhasil menyegarkan %1$d MB memori.</string>
+    <string name="library_tab_personal">Pribadi</string>
+    <string name="library_tab_work">Kerja</string>
+    <string name="library_work_paused_title">Profil kerja dijeda</string>
+    <string name="library_work_turn_on">Aktifkan Aplikasi Kerja</string>
+    <string name="library_work_pause">Jeda Aplikasi Kerja</string>
+    <string name="settings_backup_passphrase_title">Kata Sandi Cadangan (Opsional)</string>
+    <string name="settings_backup_passphrase_hint">Masukkan kata sandi untuk enkripsi cadangan</string>
+    <string name="settings_backup_decrypt_title">Dekripsi Cadangan</string>
+    <string name="settings_backup_decrypt_prompt">Masukkan kata sandi untuk membuka cadangan ini:</string>
+    <string name="settings_backup_decrypt_wrong_pass">Kata sandi salah atau berkas cadangan rusak</string>
 </resources>

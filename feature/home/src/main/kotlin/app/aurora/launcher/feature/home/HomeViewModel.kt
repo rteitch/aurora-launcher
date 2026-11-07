@@ -97,7 +97,7 @@ class HomeViewModel @Inject constructor(
     }
 
     fun undo() {
-        if (undoStack.isEmpty()) return
+        if (uiState.value.settings.desktopLocked || undoStack.isEmpty()) return
         val current = uiState.value.workspace
         val target = undoStack.removeLast()
         redoStack.addLast(current)
@@ -108,7 +108,7 @@ class HomeViewModel @Inject constructor(
     }
 
     fun redo() {
-        if (redoStack.isEmpty()) return
+        if (uiState.value.settings.desktopLocked || redoStack.isEmpty()) return
         val current = uiState.value.workspace
         val target = redoStack.removeLast()
         undoStack.addLast(current)
@@ -119,12 +119,14 @@ class HomeViewModel @Inject constructor(
     }
 
     fun removeSmartHeader() {
+        if (uiState.value.settings.desktopLocked) return
         viewModelScope.launch {
             settingsRepository.updateSettings { it.copy(showSmartHeaderOnPage1 = false) }
         }
     }
 
     fun addNewPage(onCreated: ((Int) -> Unit)? = null) {
+        if (uiState.value.settings.desktopLocked) return
         val currentSnap = uiState.value.workspace
         pushUndo(currentSnap)
         viewModelScope.launch {
@@ -184,9 +186,11 @@ class HomeViewModel @Inject constructor(
         isTabletFlow.value = isTablet
     }
 
-    fun enterEditMode() {
+    fun enterEditMode(): Boolean {
+        if (uiState.value.settings.desktopLocked) return false
         quickActionsFlow.value = null
         modeFlow.value = HomeUiMode.EditMode(dragSession = null)
+        return true
     }
 
     fun exitEditMode() {
@@ -195,6 +199,7 @@ class HomeViewModel @Inject constructor(
     }
 
     fun beginDrag(item: WorkspaceItem, pageIndex: Int) {
+        if (uiState.value.settings.desktopLocked) return
         releaseDragLease()
         val comp = (item as? WorkspaceItem.App)?.component
         activeDragLease = workspaceRepository.acquireDragLease(
@@ -225,6 +230,12 @@ class HomeViewModel @Inject constructor(
         defaultFolderTitle: String,
         onRejected: () -> Unit,
     ) {
+        if (uiState.value.settings.desktopLocked) {
+            releaseDragLease()
+            modeFlow.value = HomeUiMode.Normal
+            onRejected()
+            return
+        }
         val snapshot = uiState.value.workspace
         val resolution = GridOccupancyEngine.resolveDrop(
             snapshot = snapshot,
@@ -257,6 +268,7 @@ class HomeViewModel @Inject constructor(
         dy: Int,
         defaultFolderTitle: String,
     ) {
+        if (uiState.value.settings.desktopLocked) return
         val snapshot = uiState.value.workspace
         val (pageId, curX, curY) = when (item) {
             is WorkspaceItem.App -> {
@@ -290,6 +302,7 @@ class HomeViewModel @Inject constructor(
         target: DropTarget,
         defaultFolderTitle: String,
     ) {
+        if (uiState.value.settings.desktopLocked) return
         val snapshot = uiState.value.workspace
         val resolution = GridOccupancyEngine.resolveDrop(snapshot, itemId, target, defaultFolderTitle)
         if (resolution !is DropResolution.Reject) {
@@ -326,6 +339,7 @@ class HomeViewModel @Inject constructor(
     }
 
     fun removeItemFromHome(itemId: ItemId) {
+        if (uiState.value.settings.desktopLocked) return
         dismissQuickActions()
         pushUndo(uiState.value.workspace)
         viewModelScope.launch {
@@ -338,6 +352,10 @@ class HomeViewModel @Inject constructor(
     }
 
     fun pinAppShortcut(shortcut: AppShortcutItem, onResult: (Boolean) -> Unit) {
+        if (uiState.value.settings.desktopLocked) {
+            onResult(false)
+            return
+        }
         dismissQuickActions()
         viewModelScope.launch {
             val ok = workspaceRepository.pinShortcut(
@@ -412,6 +430,7 @@ class HomeViewModel @Inject constructor(
     }
 
     fun packWorkspace() {
+        if (uiState.value.settings.desktopLocked) return
         val spec = uiState.value.workspace.gridSpec
         pushUndo(uiState.value.workspace)
         viewModelScope.launch {
@@ -438,6 +457,10 @@ class HomeViewModel @Inject constructor(
     }
 
     fun deletePage(pageId: PageId, onResult: (Boolean) -> Unit = {}) {
+        if (uiState.value.settings.desktopLocked) {
+            onResult(false)
+            return
+        }
         val spec = uiState.value.workspace.gridSpec
         pushUndo(uiState.value.workspace)
         viewModelScope.launch {
