@@ -45,6 +45,7 @@ import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Remove
+import androidx.compose.material.icons.outlined.SortByAlpha
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -277,6 +278,7 @@ fun FolderOverlayModal(
     onRenameFolder: (ItemId, String) -> Unit,
     onAppClick: (ComponentKey) -> Unit,
     onRemoveChildFromFolder: (ItemId) -> Unit,
+    onSortAlphabetically: ((ItemId) -> Unit)? = null,
 ) {
     val visible = folder != null
     val reduceMotion = AuroraTheme.reduceMotion
@@ -402,6 +404,21 @@ fun FolderOverlayModal(
                                     contentDescription = stringResource(R.string.folder_rename_action),
                                     tint = palette.onSurface,
                                 )
+                            }
+                            if (onSortAlphabetically != null && activeFolder.children.size > 1) {
+                                IconButton(
+                                    onClick = { onSortAlphabetically(activeFolder.id) },
+                                    modifier = Modifier.defaultMinSize(
+                                        minWidth = AuroraSpacing.minTouchTarget,
+                                        minHeight = AuroraSpacing.minTouchTarget,
+                                    ),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.SortByAlpha,
+                                        contentDescription = stringResource(R.string.folder_sort_alphabetical),
+                                        tint = palette.onSurface,
+                                    )
+                                }
                             }
                             IconButton(
                                 onClick = onDismiss,

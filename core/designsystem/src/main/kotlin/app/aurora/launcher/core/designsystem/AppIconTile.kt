@@ -41,6 +41,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
@@ -67,6 +68,7 @@ fun AppIconTile(
     profileBadge: ProfileBadge = ProfileBadge.PERSONAL,
     useWallpaperScrimForLabel: Boolean = true,
     accessibilityActions: List<CustomAccessibilityAction> = emptyList(),
+    enabled: Boolean = true,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
     onRemoveClick: (() -> Unit)? = null,
@@ -111,12 +113,49 @@ fun AppIconTile(
     }
 
     val tileClickModifier = when {
-        isEditMode -> Modifier
+        !enabled || isEditMode -> Modifier
         onLongClick != null -> Modifier.combinedClickable(
             onClick = onClick,
             onLongClick = onLongClick,
         )
         else -> Modifier.clickable(onClick = onClick)
+    }
+
+    val fullContentDescription = remember(label, profileBadge, isLocked, isSuspendedOrPaused, badgeCount) {
+        buildString {
+            append(label)
+            if (profileBadge == ProfileBadge.WORK) {
+                append(", Work profile")
+            }
+            if (isLocked) {
+                append(", Locked")
+            }
+            if (isSuspendedOrPaused) {
+                append(", Suspended")
+            }
+            if (badgeCount > 0) {
+                append(", $badgeCount unread notifications")
+            }
+        }
+    }
+
+    val semanticsModifier = if (enabled) {
+        Modifier.semantics {
+            contentDescription = fullContentDescription
+            if (accessibilityActions.isNotEmpty()) {
+                customActions = accessibilityActions
+            }
+        }
+    } else {
+        Modifier.clearAndSetSemantics { }
+    }
+
+    val interactionModifier = if (enabled) {
+        Modifier
+            .auroraFocusRing(RoundedCornerShape(14.dp))
+            .then(tileClickModifier)
+    } else {
+        Modifier
     }
 
     Column(
@@ -127,14 +166,8 @@ fun AppIconTile(
                 minWidth = AuroraSpacing.minTouchTarget,
                 minHeight = AuroraSpacing.minTouchTarget,
             )
-            .auroraFocusRing(RoundedCornerShape(14.dp))
-            .semantics {
-                contentDescription = label
-                if (accessibilityActions.isNotEmpty()) {
-                    customActions = accessibilityActions
-                }
-            }
-            .then(tileClickModifier)
+            .then(semanticsModifier)
+            .then(interactionModifier)
             .padding(vertical = 2.dp, horizontal = 2.dp),
     ) {
         Box(

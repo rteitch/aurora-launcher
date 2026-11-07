@@ -59,6 +59,16 @@ enum class SwipeUpAction {
 }
 
 @Serializable
+enum class DoubleTapAction {
+    NONE,
+    LOCK_SCREEN,
+    SPOTLIGHT,
+    CONTROL_PANEL,
+    SETTINGS,
+    APP_LIBRARY,
+}
+
+@Serializable
 data class LauncherSettings(
     val onboardingCompleted: Boolean = false,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
@@ -77,6 +87,7 @@ data class LauncherSettings(
     val swipeDownSpotlightEnabled: Boolean = true,
     val topRightControlPanelEnabled: Boolean = true,
     val swipeUpAction: SwipeUpAction = SwipeUpAction.APP_LIBRARY,
+    val doubleTapAction: DoubleTapAction = DoubleTapAction.NONE,
     val autoReflowGrid: Boolean = false,
     val hiddenPageIds: Set<Long> = emptySet(),
     val showSmartHeaderOnPage1: Boolean = true,

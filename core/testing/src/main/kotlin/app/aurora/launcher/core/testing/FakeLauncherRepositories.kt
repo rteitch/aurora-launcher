@@ -191,6 +191,24 @@ class FakeWorkspaceRepository(
         return true
     }
     override suspend fun renameFolder(folderId: ItemId, newTitle: String) {}
+    override suspend fun sortFolderAlphabetically(folderId: ItemId) {
+        val snap = current.value
+        val updatedPages = snap.pages.map { page ->
+            page.copy(
+                items = page.items.map { item ->
+                    if (item is WorkspaceItem.Folder && item.id == folderId) {
+                        item.copy(children = item.children.sortedBy { it.component.packageName })
+                    } else item
+                }
+            )
+        }
+        val updatedDock = snap.dockItems.map { item ->
+            if (item is WorkspaceItem.Folder && item.id == folderId) {
+                item.copy(children = item.children.sortedBy { it.component.packageName })
+            } else item
+        }
+        current.value = snap.copy(pages = updatedPages, dockItems = updatedDock)
+    }
     override suspend fun placeWidget(
         candidate: WidgetProviderCandidate,
         appWidgetId: AppWidgetId,

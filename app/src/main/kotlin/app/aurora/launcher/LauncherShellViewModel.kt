@@ -266,6 +266,12 @@ class LauncherShellViewModel @Inject constructor(
         }
     }
 
+    fun sortFolderAlphabetically(folderId: ItemId) {
+        viewModelScope.launch {
+            workspaceRepository.sortFolderAlphabetically(folderId)
+        }
+    }
+
     fun removeChildFromFolder(childItemId: ItemId) {
         viewModelScope.launch {
             workspaceRepository.extractChildFromFolder(childItemId)

@@ -1052,8 +1052,8 @@ private fun AlphabeticalAppRow(
             badgeCount = badgeCount,
             profileBadge = app.profileBadge,
             useWallpaperScrimForLabel = false,
-            onClick = onClick,
-            onLongClick = onLongClick,
+            enabled = false,
+            onClick = {},
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(

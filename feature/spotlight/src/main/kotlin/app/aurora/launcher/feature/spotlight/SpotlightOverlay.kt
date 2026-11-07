@@ -92,8 +92,10 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -975,6 +977,28 @@ private fun SwipeableAppSearchResultRow(
             }
         }
 
+        val actionAddLabel = stringResource(R.string.quick_action_add_to_home)
+        val actionInfoLabel = stringResource(R.string.quick_action_app_info)
+        val actionUninstallLabel = stringResource(R.string.quick_action_uninstall)
+        val rowAccessibilityActions = remember(app.isSystemApp, actionAddLabel, actionInfoLabel, actionUninstallLabel) {
+            buildList {
+                add(CustomAccessibilityAction(actionAddLabel) {
+                    onQuickAction(SpotlightQuickAction.ADD_TO_HOME)
+                    true
+                })
+                add(CustomAccessibilityAction(actionInfoLabel) {
+                    onQuickAction(SpotlightQuickAction.APP_INFO)
+                    true
+                })
+                if (!app.isSystemApp) {
+                    add(CustomAccessibilityAction(actionUninstallLabel) {
+                        onQuickAction(SpotlightQuickAction.UNINSTALL)
+                        true
+                    })
+                }
+            }
+        }
+
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(AuroraSpacing.md),
@@ -984,6 +1008,9 @@ private fun SwipeableAppSearchResultRow(
                 .background(palette.surface)
                 .defaultMinSize(minHeight = 56.dp)
                 .auroraFocusRing(RoundedCornerShape(AuroraRadii.input))
+                .semantics {
+                    customActions = rowAccessibilityActions
+                }
                 .pointerInput(app.key) {
                     detectHorizontalDragGestures(
                         onDragEnd = {
@@ -1032,17 +1059,8 @@ private fun SwipeableAppSearchResultRow(
                 badgeCount = badgeCount,
                 profileBadge = app.profileBadge,
                 useWallpaperScrimForLabel = false,
-                onClick = {
-                    if (offsetX.value < -10f) {
-                        coroutineScope.launch { offsetX.animateTo(0f, tween(200, easing = FastOutSlowInEasing)) }
-                    } else {
-                        onLaunch()
-                    }
-                },
-                onLongClick = {
-                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onLongClick()
-                },
+                enabled = false,
+                onClick = {},
             )
             Text(
                 text = app.label,

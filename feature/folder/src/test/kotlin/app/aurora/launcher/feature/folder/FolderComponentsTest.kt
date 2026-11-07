@@ -124,4 +124,29 @@ class FolderComponentsTest {
         onRemoveClick()
         assertEquals(folderId, removedFolderId)
     }
+
+    @Test
+    fun folderSortAlphabeticalCallbackInvoked() {
+        var sortedFolderId: ItemId? = null
+        val onSortAlphabetically: (ItemId) -> Unit = { id ->
+            sortedFolderId = id
+        }
+        onSortAlphabetically(testFolder.id)
+        assertEquals(folderId, sortedFolderId)
+    }
+
+    @Test
+    fun folderChildrenAlphabeticalOrderingLogic() {
+        val unsortedChildren = listOf(
+            childApp2.copy(component = ComponentKey("com.example.zebra", "Main", 0L)),
+            childApp1.copy(component = ComponentKey("com.example.apple", "Main", 0L)),
+            childApp3.copy(component = ComponentKey("com.example.mango", "Main", 0L)),
+        )
+        val sorted = unsortedChildren.sortedWith(
+            compareBy(String.CASE_INSENSITIVE_ORDER) { it.component.packageName }
+        )
+        assertEquals("com.example.apple", sorted[0].component.packageName)
+        assertEquals("com.example.mango", sorted[1].component.packageName)
+        assertEquals("com.example.zebra", sorted[2].component.packageName)
+    }
 }

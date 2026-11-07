@@ -97,6 +97,7 @@ import app.aurora.launcher.core.designsystem.R
 import app.aurora.launcher.core.designsystem.auroraFocusRing
 import app.aurora.launcher.core.model.AppEntry
 import app.aurora.launcher.core.model.ComponentKey
+import app.aurora.launcher.core.model.DoubleTapAction
 import app.aurora.launcher.core.model.GlassIntensity
 import app.aurora.launcher.core.model.GlassTier
 import app.aurora.launcher.core.model.GridPreset
@@ -895,6 +896,32 @@ private fun SettingsMainContent(
                                 checked = state.settings.includeContactsInSearch,
                                 onCheckedChange = { v -> viewModel.updateSettings { it.copy(includeContactsInSearch = v) } },
                             )
+                        }
+
+                        Text(
+                            text = stringResource(R.string.settings_double_tap_title),
+                            style = AuroraTypography.titleSmall,
+                            color = palette.onSurface,
+                            modifier = Modifier.padding(top = AuroraSpacing.sm),
+                        )
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(AuroraSpacing.sm),
+                            verticalArrangement = Arrangement.spacedBy(AuroraSpacing.xs),
+                        ) {
+                            listOf(
+                                DoubleTapAction.NONE to R.string.settings_double_tap_none,
+                                DoubleTapAction.LOCK_SCREEN to R.string.settings_double_tap_lock,
+                                DoubleTapAction.SPOTLIGHT to R.string.settings_double_tap_spotlight,
+                                DoubleTapAction.CONTROL_PANEL to R.string.settings_double_tap_control,
+                                DoubleTapAction.SETTINGS to R.string.settings_double_tap_settings,
+                                DoubleTapAction.APP_LIBRARY to R.string.settings_double_tap_app_library,
+                            ).forEach { (action, resId) ->
+                                SettingsPill(
+                                    label = stringResource(resId),
+                                    selected = state.settings.doubleTapAction == action,
+                                    onClick = { viewModel.updateSettings { it.copy(doubleTapAction = action) } },
+                                )
+                            }
                         }
                     }
                 }

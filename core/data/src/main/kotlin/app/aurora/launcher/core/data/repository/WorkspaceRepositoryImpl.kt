@@ -413,6 +413,28 @@ class WorkspaceRepositoryImpl @Inject constructor(
         dao.updateWorkspaceItem(existing.copy(title = sanitized, updatedAt = System.currentTimeMillis()))
     }
 
+    override suspend fun sortFolderAlphabetically(folderId: ItemId) {
+        database.withTransaction {
+            val allItems = dao.getWorkspaceItems()
+            val folderChildren = allItems.filter { it.containerId == folderId.value && it.type == "APP" }
+            if (folderChildren.size <= 1) return@withTransaction
+
+            val apps = dao.getApps().associateBy { "${it.packageName}|${it.activityClass}|${it.userSerial}" }
+            val sorted = folderChildren.sortedWith(
+                compareBy(String.CASE_INSENSITIVE_ORDER) { item ->
+                    val appKey = "${item.packageName.orEmpty()}|${item.activityClass.orEmpty()}|${item.userSerial}"
+                    apps[appKey]?.label ?: item.title ?: item.packageName.orEmpty()
+                }
+            )
+
+            sorted.forEachIndexed { index, child ->
+                if (child.rank != index) {
+                    dao.updateWorkspaceItem(child.copy(rank = index, updatedAt = System.currentTimeMillis()))
+                }
+            }
+        }
+    }
+
     override suspend fun placeWidget(
         candidate: WidgetProviderCandidate,
         appWidgetId: AppWidgetId,

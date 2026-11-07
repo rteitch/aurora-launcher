@@ -49,6 +49,7 @@ interface WorkspaceRepository {
     suspend fun removeItemFromHome(itemId: ItemId): List<AppWidgetId>
     suspend fun extractChildFromFolder(childItemId: ItemId): Boolean
     suspend fun renameFolder(folderId: ItemId, newTitle: String)
+    suspend fun sortFolderAlphabetically(folderId: ItemId)
     suspend fun placeWidget(
         candidate: WidgetProviderCandidate,
         appWidgetId: AppWidgetId,

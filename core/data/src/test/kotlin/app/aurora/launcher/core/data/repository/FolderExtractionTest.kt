@@ -119,4 +119,26 @@ class FolderExtractionTest {
         val success = repository.extractChildFromFolder(ItemId(999L))
         assertFalse(success)
     }
+
+    @Test
+    fun `sorting folder alphabetically reorders children in repository`() = runTest {
+        val folder = WorkspaceItem.Folder(
+            id = ItemId(10L),
+            placement = ContainerPlacement.Desktop(pageId, 0, 0),
+            title = "Utilities",
+            children = listOf(app3, app1, app2), // app.three, app.one, app.two
+        )
+        val initial = WorkspaceSnapshot(
+            pages = listOf(WorkspacePage(pageId, 0, listOf(folder))),
+            dockItems = emptyList(),
+            gridSpec = GridSpec(4, 6, 4),
+        )
+        val repository = FakeWorkspaceRepository(initial)
+
+        repository.sortFolderAlphabetically(folder.id)
+
+        val updated = repository.current.value
+        val updatedFolder = updated.pages.first().items.filterIsInstance<WorkspaceItem.Folder>().single()
+        assertEquals(listOf("app.one", "app.three", "app.two"), updatedFolder.children.map { it.component.packageName })
+    }
 }

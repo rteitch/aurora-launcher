@@ -1,5 +1,8 @@
 package app.aurora.launcher
 
+import android.app.admin.DevicePolicyManager
+import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.graphics.Rect
 import android.os.Build
@@ -38,12 +41,14 @@ import app.aurora.launcher.core.designsystem.AuroraTheme
 import app.aurora.launcher.core.designsystem.ProceduralWallpaperCanvas
 import app.aurora.launcher.core.designsystem.R
 import app.aurora.launcher.core.model.ComponentKey
+import app.aurora.launcher.core.model.DoubleTapAction
 import app.aurora.launcher.core.model.GlassTier
 import app.aurora.launcher.core.model.GridSpec
 import app.aurora.launcher.core.model.ShellOverlay
 import app.aurora.launcher.core.model.WallpaperStyle
 import app.aurora.launcher.core.platform.AppWidgetHostManager
 import app.aurora.launcher.core.platform.BiometricAuthGateway
+import app.aurora.launcher.receiver.AuroraDeviceAdminReceiver
 import app.aurora.launcher.feature.applibrary.AppLibraryPage
 import app.aurora.launcher.feature.controlpanel.ControlPanelOverlay
 import app.aurora.launcher.feature.folder.FolderOverlayModal
@@ -172,9 +177,35 @@ private fun LauncherShell(
         launchWithBoundsHandler(key, null)
     }
 
+    val handleDoubleTapAction: (DoubleTapAction) -> Unit = { action ->
+        when (action) {
+            DoubleTapAction.NONE -> Unit
+            DoubleTapAction.LOCK_SCREEN -> {
+                val dpm = activity.getSystemService(Context.DEVICE_POLICY_SERVICE) as? DevicePolicyManager
+                val adminComponent = ComponentName(activity, AuroraDeviceAdminReceiver::class.java)
+                if (dpm != null && dpm.isAdminActive(adminComponent)) {
+                    dpm.lockNow()
+                } else {
+                    val promptIntent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
+                        putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, adminComponent)
+                        putExtra(
+                            DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                            activity.getString(R.string.device_admin_lock_explanation),
+                        )
+                    }
+                    runCatching { activity.startActivity(promptIntent) }
+                }
+            }
+            DoubleTapAction.SPOTLIGHT -> viewModel.openSpotlight()
+            DoubleTapAction.CONTROL_PANEL -> viewModel.openControlPanel()
+            DoubleTapAction.SETTINGS -> viewModel.openSettings()
+            DoubleTapAction.APP_LIBRARY -> Unit
+        }
+    }
+
     AuroraLauncherTheme(
         themeMode = state.settings.themeMode,
-        reduceMotionOverride = state.settings.reduceMotionOverride,
+        reduceMotionOverride = if (state.settings.potatoModeEnabled) true else state.settings.reduceMotionOverride,
     ) {
         val palette = AuroraTheme.palette
         val view = LocalView.current
@@ -259,6 +290,7 @@ private fun LauncherShell(
                     onOpenWidgetPicker = viewModel::openWidgetPicker,
                     onOpenSettings = viewModel::openSettings,
                     onShowMessage = viewModel::showMessage,
+                    onDoubleTapAction = handleDoubleTapAction,
                     folderTileSlot = { folder, iconSize, showLabel, isEditMode, scrim, a11y, onClick, onLongClick, onRemoveClick ->
                         FolderTilePreview(
                             folder = folder,
@@ -336,6 +368,10 @@ private fun LauncherShell(
                 onRenameFolder = viewModel::renameFolder,
                 onAppClick = launchHandler,
                 onRemoveChildFromFolder = viewModel::removeChildFromFolder,
+                onSortAlphabetically = { folderId ->
+                    viewModel.sortFolderAlphabetically(folderId)
+                    viewModel.showMessage(activity.getString(R.string.folder_sorted_notice))
+                },
             )
 
             val activeSpotlight = state.overlay as? ShellOverlay.Spotlight
@@ -370,7 +406,7 @@ private fun LauncherShell(
                 runCatching {
                     @Suppress("DEPRECATION")
                     activity.packageManager.getPackageInfo(activity.packageName, 0).versionName
-                }.getOrNull() ?: "1.6.0"
+                }.getOrNull() ?: "1.7.0"
             }
 
             SettingsOverlay(

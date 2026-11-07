@@ -172,27 +172,34 @@ open class IconCacheAndLoader(
         return "${iconPackPackage.orEmpty()}|${key.asCompactKey()}"
     }
 
-    private fun getDiskFile(cKey: String): File? {
+    private fun getDiskFile(cKey: String, extension: String = "webp"): File? {
         val dir = diskCacheDir ?: return null
         val hash = safeSystemCall {
             val md = MessageDigest.getInstance("MD5")
             val bytes = md.digest(cKey.toByteArray())
             bytes.joinToString("") { "%02x".format(it) }
         }.getOrNull() ?: cKey.replace(Regex("[^a-zA-Z0-9_.-]"), "_")
-        return File(dir, "$hash.png")
+        return File(dir, "$hash.$extension")
     }
 
     private fun loadFromDisk(cKey: String): ImageBitmap? {
-        val file = getDiskFile(cKey) ?: return null
-        if (!file.exists() || file.length() == 0L) return null
+        val webpFile = getDiskFile(cKey, "webp")
+        val targetFile = if (webpFile != null && webpFile.exists() && webpFile.length() > 0L) {
+            webpFile
+        } else {
+            val pngFile = getDiskFile(cKey, "png")
+            if (pngFile != null && pngFile.exists() && pngFile.length() > 0L) pngFile else null
+        } ?: return null
+
         return safeSystemCall {
-            file.setLastModified(System.currentTimeMillis())
-            BitmapFactory.decodeFile(file.absolutePath)?.asImageBitmap()
+            targetFile.setLastModified(System.currentTimeMillis())
+            BitmapFactory.decodeFile(targetFile.absolutePath)?.asImageBitmap()
         }.getOrNull()
     }
 
+    @Suppress("DEPRECATION")
     private fun saveToDisk(cKey: String, bitmap: Bitmap) {
-        val file = getDiskFile(cKey) ?: return
+        val file = getDiskFile(cKey, "webp") ?: return
         safeSystemCall {
             val parent = file.parentFile ?: return@safeSystemCall
             if (!parent.exists()) {
@@ -201,12 +208,21 @@ open class IconCacheAndLoader(
             val temp = File(parent, "${file.name}.${System.nanoTime()}.tmp")
             try {
                 temp.outputStream().use { out ->
-                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+                    val format = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        Bitmap.CompressFormat.WEBP_LOSSY
+                    } else {
+                        Bitmap.CompressFormat.WEBP
+                    }
+                    bitmap.compress(format, 88, out)
                     out.flush()
                 }
                 if (temp.exists()) {
                     if (file.exists()) file.delete()
                     temp.renameTo(file)
+                    val legacyPng = getDiskFile(cKey, "png")
+                    if (legacyPng != null && legacyPng.exists()) {
+                        legacyPng.delete()
+                    }
                 }
                 pruneDiskCacheIfNeeded(parent)
             } finally {
@@ -219,7 +235,7 @@ open class IconCacheAndLoader(
 
     private fun pruneDiskCacheIfNeeded(dir: File) {
         safeSystemCall {
-            val files = dir.listFiles { f -> f.extension == "png" } ?: return@safeSystemCall
+            val files = dir.listFiles { f -> f.extension == "webp" || f.extension == "png" } ?: return@safeSystemCall
             if (files.size > 400) {
                 files.sortedBy { it.lastModified() }
                     .take(files.size - 300)

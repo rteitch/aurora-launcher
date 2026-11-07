@@ -84,6 +84,8 @@
     <string name="folder_remove_item">Keluarkan dari Folder</string>
     <string name="folder_child_action_desc">Keluarkan %1$s dari folder ini dan tempatkan kembali di layar utama?</string>
     <string name="folder_item_count">%1$d aplikasi</string>
+    <string name="folder_sort_alphabetical">Urutkan Abjad</string>
+    <string name="folder_sorted_notice">Folder diurutkan berdasarkan abjad</string>
 
     <!-- App Library (UC-07) -->
     <string name="library_title">App Library</string>
@@ -214,6 +216,16 @@
     <string name="settings_icon_pack_none">Ikon Bawaan Sistem</string>
 
     <string name="settings_group_gestures">Gestur &amp; Pencarian</string>
+    <string name="settings_double_tap_title">Ketuk Dua Kali di Wallpaper</string>
+    <string name="settings_double_tap_none">Tidak Ada</string>
+    <string name="settings_double_tap_lock">Kunci Layar</string>
+    <string name="settings_double_tap_spotlight">Pencarian Spotlight</string>
+    <string name="settings_double_tap_control">Kontrol Cepat</string>
+    <string name="settings_double_tap_settings">Pengaturan</string>
+    <string name="settings_double_tap_app_library">App Library</string>
+    <string name="device_admin_lock_explanation">Aurora Launcher menggunakan izin Administrator Perangkat khusus untuk mengunci layar saat gestur ketuk ganda pada wallpaper.</string>
+    <string name="device_admin_prompt_title">Izin Admin Perangkat Dibutuhkan</string>
+    <string name="device_admin_prompt_body">Untuk mengunci layar saat ketuk dua kali, aktifkan Administrator Perangkat untuk Aurora Launcher. Tidak menggunakan layanan aksesibilitas.</string>
     <string name="settings_swipe_down_spotlight">Geser turun di layar utama untuk Spotlight</string>
     <string name="settings_top_right_control">Geser turun dari kanan atas untuk Kontrol Cepat</string>
     <string name="settings_show_app_library">Tampilkan App Library di halaman paling kanan</string>

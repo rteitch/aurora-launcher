@@ -153,6 +153,7 @@ import app.aurora.launcher.core.model.AppEntry
 import app.aurora.launcher.core.model.AppLibraryClassifier
 import app.aurora.launcher.core.model.ComponentKey
 import app.aurora.launcher.core.model.ContainerPlacement
+import app.aurora.launcher.core.model.DoubleTapAction
 import app.aurora.launcher.core.model.DropTarget
 import app.aurora.launcher.core.model.GlassTier
 import app.aurora.launcher.core.model.GridOccupancyEngine
@@ -188,6 +189,7 @@ fun HomeScreen(
     onOpenWidgetPicker: (app.aurora.launcher.core.model.PageId?) -> Unit,
     onOpenSettings: () -> Unit,
     onShowMessage: (String) -> Unit,
+    onDoubleTapAction: ((DoubleTapAction) -> Unit)? = null,
     folderTileSlot: @Composable (
         folder: WorkspaceItem.Folder,
         iconSize: Dp,
@@ -528,6 +530,22 @@ fun HomeScreen(
                                     viewModel.exitEditMode()
                                 }
                             },
+                            onDoubleClick = if (state.settings.doubleTapAction != DoubleTapAction.NONE && !isEditMode) {
+                                {
+                                    when (state.settings.doubleTapAction) {
+                                        DoubleTapAction.NONE -> Unit
+                                        DoubleTapAction.LOCK_SCREEN -> onDoubleTapAction?.invoke(DoubleTapAction.LOCK_SCREEN)
+                                        DoubleTapAction.SPOTLIGHT -> onOpenSpotlight("")
+                                        DoubleTapAction.CONTROL_PANEL -> onOpenControlPanel()
+                                        DoubleTapAction.SETTINGS -> onOpenSettings()
+                                        DoubleTapAction.APP_LIBRARY -> {
+                                            if (showAppLibrary) {
+                                                scope.launch { pagerState.animateScrollToPage(workspacePages.size) }
+                                            }
+                                        }
+                                    }
+                                }
+                            } else null,
                             onLongClick = {
                                 if (!isEditMode) {
                                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
