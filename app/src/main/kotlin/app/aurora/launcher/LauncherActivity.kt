@@ -366,7 +366,7 @@ private fun LauncherShell(
                 runCatching {
                     @Suppress("DEPRECATION")
                     activity.packageManager.getPackageInfo(activity.packageName, 0).versionName
-                }.getOrNull() ?: "1.4.0"
+                }.getOrNull() ?: "1.5.0"
             }
 
             SettingsOverlay(
